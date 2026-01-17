@@ -1,38 +1,32 @@
 <?php
+declare(strict_types=1);
 
-function base_url(array $config): string {
-    $base = rtrim((string)($config['app']['base_url'] ?? ''), '/');
-    return $base;
-}
+/**
+ * Returns the base URL for the application.
+ * If APP_URL is set in config, it will use it.
+ * Otherwise it will infer from the current request.
+ */
+function base_url(string $path = ''): string
+{
+    $config = $GLOBALS['config'] ?? [];
 
-function redirect(string $url): void {
-    header('Location: ' . $url);
-    exit;
-}
+    $appUrl = $config['app']['url'] ?? '';
+    if (is_string($appUrl) && trim($appUrl) !== '') {
+        $base = rtrim($appUrl, '/');
+    } else {
+        // Infer from current request
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (($_SERVER['SERVER_PORT'] ?? '') === '443');
 
-function e(?string $value): string {
-    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-}
+        $scheme = $https ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
 
-function flash_set(string $key, string $message): void {
-    $_SESSION['flash'][$key] = $message;
-}
-
-function flash_get(string $key): ?string {
-    if (!isset($_SESSION['flash'][$key])) return null;
-    $msg = $_SESSION['flash'][$key];
-    unset($_SESSION['flash'][$key]);
-    return $msg;
-}
-
-function require_post(): void {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        http_response_code(405);
-        echo 'Method Not Allowed';
-        exit;
+        // If app is in a subfolder, infer it
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $basePath = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+        $base = $scheme . '://' . $host . ($basePath === '' ? '' : $basePath);
     }
-}
 
-function now_dt(): string {
-    return (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+    $path = ltrim($path, '/');
+    return $path === '' ? $base . '/' : $base . '/' . $path;
 }
