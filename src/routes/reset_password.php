@@ -3,135 +3,119 @@ declare(strict_types=1);
 
 $title = 'Reset password';
 
+$token = (string)($_GET['t'] ?? '');
+$token = trim($token);
+
 $errors = [];
+$done = false;
 
-$email = strtolower(trim((string)($_GET['email'] ?? ($_POST['email'] ?? ''))));
-$token = trim((string)($_GET['token'] ?? ($_POST['token'] ?? '')));
-
-$success = false;
-
-function find_user_by_reset_token(string $email, string $token): ?array
-{
-    if ($email === '' || $token === '') return null;
-
-    $tokenHash = hash('sha256', $token);
-
-    $stmt = db()->prepare("
-        SELECT *
-          FROM users
-         WHERE email = :email
-           AND reset_token_hash = :h
-           AND reset_token_expires_at IS NOT NULL
-           AND reset_token_expires_at >= :now
-         LIMIT 1
-    ");
-    $stmt->execute([
-        ':email' => $email,
-        ':h' => $tokenHash,
-        ':now' => date('Y-m-d H:i:s'),
-    ]);
-
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $row ?: null;
+if ($token === '') {
+    $errors[] = 'Invalid or missing reset token.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify_or_abort();
 
-    $new     = (string)($_POST['new_password'] ?? '');
-    $confirm = (string)($_POST['confirm_password'] ?? '');
+    $token = trim((string)($_POST['token'] ?? $token));
+    $pw1 = (string)($_POST['password'] ?? '');
+    $pw2 = (string)($_POST['password_confirm'] ?? '');
 
-    if ($email === '' || $token === '') {
-        $errors[] = 'Missing email or token.';
-    }
-
-    if ($new === '' || $confirm === '') {
-        $errors[] = 'New password and confirmation are required.';
-    }
-
-    if ($new !== $confirm) {
-        $errors[] = 'New password and confirmation do not match.';
-    }
-
-    if (strlen($new) < 8) {
-        $errors[] = 'Password must be at least 8 characters.';
-    }
+    if ($token === '') $errors[] = 'Invalid or missing reset token.';
+    if (strlen($pw1) < 8) $errors[] = 'Password must be at least 8 characters.';
+    if ($pw1 !== $pw2) $errors[] = 'Passwords do not match.';
 
     if (!$errors) {
-        $user = find_user_by_reset_token($email, $token);
+        $stmt = db()->query("
+            SELECT pr.id, pr.user_id, pr.token_hash, pr.expires_at, pr.used_at, u.email
+            FROM password_resets pr
+            JOIN users u ON u.id = pr.user_id
+            WHERE pr.used_at IS NULL
+            ORDER BY pr.id DESC
+            LIMIT 200
+        ");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if (!$user) {
-            $errors[] = 'Invalid or expired reset token.';
+        $match = null;
+        foreach ($rows as $r) {
+            $hash = (string)($r['token_hash'] ?? '');
+            if ($hash !== '' && password_verify($token, $hash)) {
+                $match = $r;
+                break;
+            }
+        }
+
+        if (!$match) {
+            $errors[] = 'This reset token is invalid or has already been used.';
         } else {
-            $newHash = password_hash($new, PASSWORD_DEFAULT);
+            $expiresAt = strtotime((string)$match['expires_at']);
+            if ($expiresAt !== false && time() > $expiresAt) {
+                $errors[] = 'This reset token has expired. Ask the administrator for a new one.';
+            } else {
+                $newHash = password_hash($pw1, PASSWORD_DEFAULT);
+                $now = date('Y-m-d H:i:s');
 
-            $upd = db()->prepare("
-                UPDATE users
-                   SET password_hash = :ph,
-                       must_change_password = 0,
-                       reset_token_hash = NULL,
-                       reset_token_expires_at = NULL,
-                       reset_token_created_at = NULL
-                 WHERE id = :id
-                 LIMIT 1
-            ");
-            $upd->execute([
-                ':ph' => $newHash,
-                ':id' => (int)$user['id'],
-            ]);
+                $upd = db()->prepare("
+                    UPDATE users
+                    SET password_hash = :h, must_change_password = 0, updated_at = :now
+                    WHERE id = :uid
+                ");
+                $upd->execute([
+                    ':h' => $newHash,
+                    ':now' => $now,
+                    ':uid' => (int)$match['user_id'],
+                ]);
 
-            $success = true;
-            flash_set('success', 'Password reset successful. Please sign in.');
-            header('Location: ' . url_for('login'));
-            exit;
+                $mark = db()->prepare("UPDATE password_resets SET used_at = :now WHERE id = :id");
+                $mark->execute([':now' => $now, ':id' => (int)$match['id']]);
+
+                login_user((int)$match['user_id']);
+                flash_set('success', 'Password updated successfully.');
+                redirect(url_for('home'));
+            }
         }
     }
 }
 
 ob_start();
 ?>
-  <h1>Reset password</h1>
-  <p class="muted">Enter the reset token shared by the Admin and set a new password.</p>
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold text-slate-100">Reset your password</h1>
+  <p class="text-slate-400 text-sm mt-1">Use the reset link provided by the administrator.</p>
+</div>
 
-  <?php if ($errors): ?>
-    <div class="card" style="border-left:4px solid #ef4444; margin-bottom:12px;">
-      <p><strong>Fix the following:</strong></p>
-      <ul>
-        <?php foreach ($errors as $err): ?>
-          <li><?= e($err) ?></li>
-        <?php endforeach; ?>
-      </ul>
-    </div>
-  <?php endif; ?>
-
-  <div class="card" style="max-width:560px;">
-    <form method="post">
-      <?= csrf_field() ?>
-
-      <label>Email</label>
-      <input type="email" name="email" value="<?= e($email) ?>" required>
-
-      <div style="height:10px;"></div>
-
-      <label>Reset token</label>
-      <input type="text" name="token" value="<?= e($token) ?>" required>
-
-      <div style="height:10px;"></div>
-
-      <label>New password</label>
-      <input type="password" name="new_password" required minlength="8">
-
-      <div style="height:10px;"></div>
-
-      <label>Confirm new password</label>
-      <input type="password" name="confirm_password" required minlength="8">
-
-      <div style="height:14px;"></div>
-
-      <button class="btn" type="submit">Reset password</button>
-      <a class="btn btn-secondary" href="<?= e(url_for('login')) ?>">Back</a>
-    </form>
+<?php if ($errors): ?>
+  <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 mb-6">
+    <p class="text-red-200 font-medium mb-2">Fix the following:</p>
+    <ul class="list-disc pl-5 text-red-100 text-sm space-y-1">
+      <?php foreach ($errors as $err): ?>
+        <li><?= e($err) ?></li>
+      <?php endforeach; ?>
+    </ul>
   </div>
+<?php endif; ?>
+
+<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-5 max-w-xl">
+  <form method="post" class="space-y-4" autocomplete="off">
+    <?= csrf_field() ?>
+    <input type="hidden" name="token" value="<?= e($token) ?>">
+
+    <div>
+      <label class="block text-sm font-medium text-slate-200 mb-1">New password</label>
+      <input class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100 focus:outline-none focus:ring-4 focus:ring-sky-100/20 focus:border-sky-400"
+             type="password" name="password" required>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-200 mb-1">Confirm password</label>
+      <input class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-slate-100 focus:outline-none focus:ring-4 focus:ring-sky-100/20 focus:border-sky-400"
+             type="password" name="password_confirm" required>
+    </div>
+
+    <button class="rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500" type="submit">
+      Update password
+    </button>
+  </form>
+</div>
 <?php
 $content = ob_get_clean();
 require __DIR__ . '/../views/layout.php';
