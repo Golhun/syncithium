@@ -13,9 +13,15 @@ return new class implements MigrationInterface
         $d = $this->driver($pdo);
 
         if ($d === 'mysql') {
-            $stmt = $pdo->prepare("SHOW TABLES LIKE :t");
+            // Use information_schema so we can bind params safely
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                  AND table_name = :t
+            ");
             $stmt->execute([':t' => $table]);
-            return (bool)$stmt->fetchColumn();
+            return ((int)$stmt->fetchColumn() > 0);
         }
 
         // SQLite
@@ -29,9 +35,15 @@ return new class implements MigrationInterface
         $d = $this->driver($pdo);
 
         if ($d === 'mysql') {
-            $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE :c");
-            $stmt->execute([':c' => $col]);
-            return (bool)$stmt->fetch();
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = :t
+                  AND column_name = :c
+            ");
+            $stmt->execute([':t' => $table, ':c' => $col]);
+            return ((int)$stmt->fetchColumn() > 0);
         }
 
         // SQLite
@@ -43,17 +55,10 @@ return new class implements MigrationInterface
         return false;
     }
 
-    private function addColumn(PDO $pdo, string $table, string $sqlFragment): void
-    {
-        // sqlFragment example: "must_change_password TINYINT(1) NOT NULL DEFAULT 1"
-        $pdo->exec("ALTER TABLE `{$table}` ADD COLUMN {$sqlFragment}");
-    }
-
     public function up(PDO $pdo): void
     {
-        // We assume users table already exists (you have schema.sql creating it).
         if (!$this->hasTable($pdo, 'users')) {
-            throw new RuntimeException("users table not found. Run your base schema/initial migration first.");
+            throw new RuntimeException("users table not found. Run your initial schema/migration first.");
         }
 
         $d = $this->driver($pdo);
@@ -61,7 +66,7 @@ return new class implements MigrationInterface
         // Add columns to users if missing
         if (!$this->hasColumn($pdo, 'users', 'must_change_password')) {
             if ($d === 'mysql') {
-                $this->addColumn($pdo, 'users', "must_change_password TINYINT(1) NOT NULL DEFAULT 1");
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `must_change_password` TINYINT(1) NOT NULL DEFAULT 1");
             } else {
                 $pdo->exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 1");
             }
@@ -69,7 +74,7 @@ return new class implements MigrationInterface
 
         if (!$this->hasColumn($pdo, 'users', 'disabled_at')) {
             if ($d === 'mysql') {
-                $this->addColumn($pdo, 'users', "disabled_at DATETIME NULL");
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `disabled_at` DATETIME NULL");
             } else {
                 $pdo->exec("ALTER TABLE users ADD COLUMN disabled_at TEXT NULL");
             }
@@ -77,24 +82,24 @@ return new class implements MigrationInterface
 
         if (!$this->hasColumn($pdo, 'users', 'updated_at')) {
             if ($d === 'mysql') {
-                $this->addColumn($pdo, 'users', "updated_at DATETIME NULL");
+                $pdo->exec("ALTER TABLE `users` ADD COLUMN `updated_at` DATETIME NULL");
             } else {
                 $pdo->exec("ALTER TABLE users ADD COLUMN updated_at TEXT NULL");
             }
         }
 
-        // Create password_resets table
+        // password_resets table
         if ($d === 'mysql') {
             $pdo->exec("
-                CREATE TABLE IF NOT EXISTS password_resets (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    user_id INT NOT NULL,
-                    token_hash VARCHAR(255) NOT NULL,
-                    expires_at DATETIME NOT NULL,
-                    used_at DATETIME NULL,
-                    created_at DATETIME NOT NULL,
-                    INDEX idx_pr_user (user_id),
-                    CONSTRAINT fk_pr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                CREATE TABLE IF NOT EXISTS `password_resets` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `user_id` INT NOT NULL,
+                    `token_hash` VARCHAR(255) NOT NULL,
+                    `expires_at` DATETIME NOT NULL,
+                    `used_at` DATETIME NULL,
+                    `created_at` DATETIME NOT NULL,
+                    INDEX `idx_pr_user` (`user_id`),
+                    CONSTRAINT `fk_pr_user` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ");
         } else {
@@ -115,7 +120,7 @@ return new class implements MigrationInterface
 
     public function down(PDO $pdo): void
     {
-        // Safe rollback: remove reset table (we do not drop columns to avoid data loss)
         $pdo->exec("DROP TABLE IF EXISTS password_resets");
+        // We intentionally do not drop the added columns from users to avoid destructive rollback.
     }
 };
