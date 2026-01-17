@@ -2,11 +2,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/bootstrap.php';
-require_once __DIR__ . '/../app/http/helpers.php';
+
+$route = $_GET['r'] ?? 'login';
 
 $routes = require __DIR__ . '/../app/routes/routes.php';
-
-$route = (string)($_GET['r'] ?? 'login');
 
 if (!isset($routes[$route]) || !is_callable($routes[$route])) {
   http_response_code(404);
@@ -14,4 +13,5 @@ if (!isset($routes[$route]) || !is_callable($routes[$route])) {
   exit;
 }
 
+// Each handler: function(PDO $db, array $config): void
 $routes[$route]($db, $config);
