@@ -4,20 +4,25 @@ require_once __DIR__ . '/../src/bootstrap.php';
 $route = $_GET['r'] ?? 'home';
 
 $allowed = [
-  'home',
-  'login', 'logout',
-  'change_password',
+    'home',
+    'login', 'logout',
+    'change_password',
+    'reset_password',
 
-  // Admin
-  'admin_users',
+    // Admin
+    'admin_users',
+    'admin_user_create',
+    'admin_user_bulk_upload',
+    'admin_generate_reset',
+    'admin_reset_password',
+    'admin_toggle_user',
 
-  // Password reset (token-based, user-facing)
-  'reset_password',
-
-  'admin_import',
-  'quiz_start', 'quiz_take', 'quiz_submit',
-  'results', 'my_attempts',
+    // existing quiz routes...
+    'admin_import',
+    'quiz_start', 'quiz_take', 'quiz_submit',
+    'results', 'my_attempts',
 ];
+
 
 
 
