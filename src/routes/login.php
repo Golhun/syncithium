@@ -1,66 +1,54 @@
 <?php
-$title = 'Sign in';
-$base = base_url($config);
+declare(strict_types=1);
 
-$pdo = db_connect($config['db']);
-$errors = [];
+$title = 'Login';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify_or_abort();
 
     $email = trim((string)($_POST['email'] ?? ''));
-    $password = (string)($_POST['password'] ?? '');
+    $pass  = (string)($_POST['password'] ?? '');
 
-    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'A valid email is required.';
-    if ($password === '') $errors[] = 'Password is required.';
-
-    if (!$errors) {
-        $stmt = $pdo->prepare('SELECT id, name, email, password_hash, is_admin FROM users WHERE email = :e LIMIT 1');
-        $stmt->execute([':e' => $email]);
-        $row = $stmt->fetch();
-
-        if (!$row || !password_verify($password, $row['password_hash'])) {
-            $errors[] = 'Invalid email or password.';
-        } else {
-            $_SESSION['user'] = [
-                'id' => (int)$row['id'],
-                'name' => (string)$row['name'],
-                'email' => (string)$row['email'],
-                'is_admin' => (int)$row['is_admin'],
-            ];
-            flash_set('success', 'Signed in.');
-            redirect($base . '/index.php');
-        }
+    if ($email === '' || $pass === '') {
+        flash_set('error', 'Email and password are required.');
+        redirect(url_for('login'));
     }
+
+    $stmt = db()->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');
+    $stmt->execute([':email' => $email]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $hash = (string)($user['password_hash'] ?? $user['password'] ?? '');
+
+    if (!$user || $hash === '' || !password_verify($pass, $hash)) {
+        flash_set('error', 'Invalid email or password.');
+        redirect(url_for('login'));
+    }
+
+    login_user((int)$user['id']);
+    flash_set('success', 'Welcome back.');
+    redirect(url_for('home'));
 }
 
 ob_start();
 ?>
   <h1>Sign in</h1>
-  <?php if ($errors): ?>
-    <div class="alert error">
-      <strong>Please fix the following:</strong>
-      <ul>
-        <?php foreach ($errors as $e): ?>
-          <li><?= e($e) ?></li>
-        <?php endforeach; ?>
-      </ul>
-    </div>
-  <?php endif; ?>
-
-  <div class="card">
-    <form method="post" action="<?= e($base) ?>/index.php?r=login">
+  <div class="card" style="max-width:520px;">
+    <form method="post">
       <?= csrf_field() ?>
+
       <label>Email</label>
-      <input name="email" type="email" value="<?= e($_POST['email'] ?? '') ?>" required>
+      <input type="email" name="email" required>
+
+      <div style="height:10px;"></div>
 
       <label>Password</label>
-      <input name="password" type="password" required>
+      <input type="password" name="password" required>
 
-      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;">
-        <button class="btn" type="submit">Sign in</button>
-        <a class="btn secondary" href="<?= e($base) ?>/index.php?r=register">Create an account</a>
-      </div>
+      <div style="height:14px;"></div>
+
+      <button class="btn" type="submit">Sign in</button>
+      <a class="btn btn-secondary" href="<?= e(url_for('home')) ?>">Back</a>
     </form>
   </div>
 <?php

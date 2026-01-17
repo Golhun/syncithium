@@ -30,7 +30,7 @@ ob_start();
         <p class="muted">See scores, review wrong answers, and repeat topics.</p>
         <p><a class="btn secondary" href="<?= e($base) ?>/index.php?r=my_attempts">My attempts</a></p>
       </div>
-      <?php if (!empty($user['is_admin'])): ?>
+      <?php if ($user && is_admin_user($user)): ?>
       <div class="card">
         <h2 style="margin-top:0;">Admin: Import questions</h2>
         <p class="muted">Upload a CSV question bank for everyone to use.</p>
