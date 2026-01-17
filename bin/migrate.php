@@ -1,21 +1,13 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../src/db.php';
+require_once __DIR__ . '/../src/bootstrap.php';
 require_once __DIR__ . '/../src/migrations/migration_interface.php';
 require_once __DIR__ . '/../src/migrations/migrator.php';
 
-$config = require __DIR__ . '/../config.php';
-date_default_timezone_set(($config['app']['timezone'] ?? 'Africa/Accra'));
-
 $cmd = $argv[1] ?? 'help';
 
-$pdo = db_connect($config['db'] ?? $config);
-
-// Migration files live here:
-$migrationsDir = __DIR__ . '/../database/migrations';
-
-$migrator = new Migrator($pdo, $migrationsDir);
+$migrator = new Migrator(db(), __DIR__ . '/../database/migrations');
 
 switch ($cmd) {
     case 'status':
