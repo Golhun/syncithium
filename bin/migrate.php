@@ -1,16 +1,21 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../src/bootstrap.php';
+require_once __DIR__ . '/../src/db.php';
 require_once __DIR__ . '/../src/migrations/migration_interface.php';
 require_once __DIR__ . '/../src/migrations/migrator.php';
 
-$root = dirname(__DIR__);
+$config = require __DIR__ . '/../config.php';
+date_default_timezone_set(($config['app']['timezone'] ?? 'Africa/Accra'));
 
 $cmd = $argv[1] ?? 'help';
 
-// Use the same PDO instance as the web app
-$migrator = new Migrator(db(), $root . '/database/migrations');
+$pdo = db_connect($config['db'] ?? $config);
+
+// Migration files live here:
+$migrationsDir = __DIR__ . '/../database/migrations';
+
+$migrator = new Migrator($pdo, $migrationsDir);
 
 switch ($cmd) {
     case 'status':

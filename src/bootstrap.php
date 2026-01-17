@@ -33,5 +33,4 @@ function db(): PDO
 
 // 4) App helpers (escaping, urls, csrf, flash, auth)
 require_once __DIR__ . '/helpers.php';
-require_once __DIR__ . '/flash.php';
 require_once __DIR__ . '/auth.php';

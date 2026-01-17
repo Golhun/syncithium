@@ -1,13 +1,17 @@
--- Syncithium (Quiz-first) schema
+-- Syncithium schema (reference)
 -- MySQL/MariaDB
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(120) NOT NULL,
+  name VARCHAR(120) NULL,
   email VARCHAR(190) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   is_admin TINYINT(1) NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  role VARCHAR(20) NOT NULL DEFAULT 'user',
+  must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+  disabled_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS questions (
@@ -20,6 +24,7 @@ CREATE TABLE IF NOT EXISTS questions (
   option_c TEXT NOT NULL,
   option_d TEXT NOT NULL,
   correct_option CHAR(1) NOT NULL,
+  explanation TEXT NULL,
   created_by INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_subject (subject),
@@ -34,10 +39,14 @@ CREATE TABLE IF NOT EXISTS attempts (
   subject VARCHAR(120) NOT NULL,
   topic VARCHAR(190) NOT NULL,
   question_count INT NOT NULL,
+  scoring_mode VARCHAR(20) NOT NULL DEFAULT 'standard',
+  timer_seconds INT NULL,
   started_at DATETIME NOT NULL,
   submitted_at DATETIME NULL,
   score INT NULL,
   total INT NULL,
+  raw_correct INT NULL,
+  raw_wrong INT NULL,
   duration_seconds INT NULL,
   INDEX idx_attempt_user (user_id),
   CONSTRAINT fk_attempts_user FOREIGN KEY (user_id) REFERENCES users(id)
