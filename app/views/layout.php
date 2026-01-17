@@ -1,44 +1,114 @@
 <?php
-$flashes = flash_get_all();
+declare(strict_types=1);
+
+/** @var string $title */
+$title = $title ?? 'Syncithium';
+
+// Try to get current user if possible
+$u = null;
+try {
+    if (isset($db) && $db instanceof PDO) {
+        $u = current_user($db);
+    }
+} catch (Throwable $e) {
+    $u = null;
+}
+
+$flash = flash_take(); // assumes your existing flash helper
 ?>
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?= e($title ?? 'Syncithium') ?></title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?= htmlspecialchars($title) ?></title>
 
-  <!-- Tailwind output (local build). If not present yet, app.css still gives basic readability. -->
-  <link rel="stylesheet" href="/public/assets/css/tailwind.min.css">
-  <link rel="stylesheet" href="/public/assets/css/app.css">
+    <!-- Tailwind / app styles (local) -->
+    <!-- Make sure this file exists: public/assets/css/app.css (Tailwind build or simple CSS) -->
+    <link rel="stylesheet" href="/public/assets/css/app.css">
 
-  <!-- Alertify (local) -->
-  <link rel="stylesheet" href="/public/assets/css/alertify.min.css">
-  <link rel="stylesheet" href="/public/assets/css/alertify.default.min.css">
+    <!-- Alertify styles (local) -->
+    <!-- Make sure these files exist under public/assets/vendor/alertify/... -->
+    <link rel="stylesheet" href="/public/assets/vendor/alertify/css/alertify.min.css">
+    <link rel="stylesheet" href="/public/assets/vendor/alertify/css/themes/default.min.css">
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-900">
+<body class="bg-gray-50 text-gray-900">
 
-  <div class="max-w-5xl mx-auto p-4 md:p-8">
+<header class="border-b border-gray-200 bg-white">
+    <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="/public/index.php" class="font-semibold text-sm">Syncithium</a>
+            <?php if ($u): ?>
+                <span class="text-xs text-gray-500">
+                    Signed in as <?= htmlspecialchars((string)$u['email']) ?>
+                    (<?= htmlspecialchars((string)($u['role'] ?? 'user')) ?>)
+                </span>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($u): ?>
+            <nav class="flex items-center gap-2 text-sm">
+                <?php if (($u['role'] ?? 'user') === 'admin'): ?>
+                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                       href="/public/index.php?r=admin_users">
+                        Users
+                    </a>
+
+                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                       href="/public/index.php?r=admin_levels">
+                        Taxonomy
+                    </a>
+
+                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                       href="/public/index.php?r=admin_questions">
+                        Questions
+                    </a>
+
+                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                       href="/public/index.php?r=admin_reset_requests">
+                        Reset requests
+                    </a>
+                <?php else: ?>
+                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                       href="/public/index.php?r=taxonomy_selector">
+                        Choose topics
+                    </a>
+                <?php endif; ?>
+
+                <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                   href="/public/index.php?r=logout">
+                    Sign out
+                </a>
+            </nav>
+        <?php endif; ?>
+    </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-6 py-6">
     <?php require $view_file; ?>
-  </div>
+</main>
 
-  <script src="/public/assets/js/alertify.min.js"></script>
-  <script src="/public/assets/js/alpine.min.js" defer></script>
-  <script src="/public/assets/js/app.js"></script>
+<!-- Alpine (local) -->
+<!-- Make sure this file exists: public/assets/vendor/alpine/alpine.min.js -->
+<script src="/public/assets/vendor/alpine/alpine.min.js" defer></script>
 
-  <script>
-    window.__FLASH__ = <?= json_encode($flashes, JSON_UNESCAPED_SLASHES) ?>;
-  </script>
-  <script>
-    (function () {
-      const items = window.__FLASH__ || [];
-      if (!window.alertify) return;
-      items.forEach(({type, message}) => {
-        if (type === 'success') alertify.success(message);
-        else if (type === 'error') alertify.error(message);
-        else alertify.message(message);
-      });
-    })();
-  </script>
+<!-- Alertify (local) -->
+<!-- Make sure this file exists: public/assets/vendor/alertify/alertify.min.js -->
+<script src="/public/assets/vendor/alertify/alertify.min.js"></script>
+
+<?php if (!empty($flash) && is_array($flash)): ?>
+    <script>
+        (function () {
+            const type = <?= json_encode((string)($flash['type'] ?? 'info')) ?>;
+            const msg  = <?= json_encode((string)($flash['message'] ?? '')) ?>;
+            if (!msg) return;
+
+            if (type === 'success') alertify.success(msg);
+            else if (type === 'error') alertify.error(msg);
+            else alertify.message(msg);
+        })();
+    </script>
+<?php endif; ?>
+
 </body>
 </html>

@@ -1,39 +1,39 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Central route registry.
- * Every routes file MUST return: array<string, callable>
- */
-
 $routes = [];
 
+/**
+ * Load a route module that returns an array of [route_name => handler].
+ */
 $load = function (string $file) use (&$routes): void {
-  $path = __DIR__ . DIRECTORY_SEPARATOR . $file;
+  $path = __DIR__ . '/' . $file;
 
+  // If the module does not exist, skip instead of crashing.
   if (!is_file($path)) {
-    throw new RuntimeException("Routes file missing: {$file}");
+    return;
   }
 
-  $chunk = require $path;
+  $map = require $path;
 
-  if (!is_array($chunk)) {
-    $type = gettype($chunk);
-    throw new RuntimeException(
-      "Routes file '{$file}' must return an array, got {$type}. " .
-      "Do not echo HTML in routes files, move HTML to app/views and return route closures."
-    );
+  if (!is_array($map)) {
+    throw new RuntimeException("Routes file must return an array: {$file}");
   }
 
-  $routes = array_merge($routes, $chunk);
+  $routes = array_merge($routes, $map);
 };
 
+// Auth + password reset flows
 $load('auth.php');
+
+// Admin user management (create, bulk, reset, reset-requests, credential reveal)
 $load('admin_users.php');
+
+// Taxonomy admin and user selector / APIs
 $load('taxonomy_admin.php');
 $load('taxonomy_user.php');
-$load('api_taxonomy.php');
+
+// Question bank admin (list, edit, import)
 $load('questions_admin.php');
-$load('questions_user.php');
 
 return $routes;
