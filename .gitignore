@@ -1,0 +1,64 @@
+# -----------------------------
+# Syncithium (PHP) - .gitignore
+# -----------------------------
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# IDEs
+.vscode/
+.idea/
+*.code-workspace
+
+# Composer / PHP deps (ignore vendor if you install deps)
+vendor/
+composer.lock
+
+# Environment / config (DO NOT COMMIT)
+config.php
+config.local.php
+.env
+.env.*
+*.env
+
+# Storage runtime (keep folder, ignore contents)
+storage/*
+!storage/.gitkeep
+
+# Logs
+*.log
+storage/logs/*
+!storage/logs/.gitkeep
+
+# Database files (SQLite)
+*.sqlite
+*.sqlite3
+*.db
+storage/*.sqlite
+storage/*.sqlite3
+storage/*.db
+
+# Caches / sessions (if you use them)
+storage/cache/*
+storage/sessions/*
+!storage/cache/.gitkeep
+!storage/sessions/.gitkeep
+
+# Uploads (if applicable)
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Exports / generated files
+exports/
+tmp/
+cache/
+
+# Test artifacts / coverage
+coverage/
+.phpunit.result.cache
