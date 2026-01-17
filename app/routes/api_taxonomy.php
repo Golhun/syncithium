@@ -56,4 +56,21 @@ return [
     exit;
   },
 
+
+  'api_levels' => function (PDO $db, array $config): void {
+  require_login($db);
+  header('Content-Type: application/json; charset=utf-8');
+
+  $stmt = $db->prepare("SELECT id, code, name FROM levels ORDER BY CAST(code AS UNSIGNED), code");
+  $stmt->execute();
+
+  $out = [];
+  foreach (($stmt->fetchAll() ?: []) as $l) {
+    $label = $l['code'] . (!empty($l['name']) ? (' , ' . $l['name']) : '');
+    $out[] = ['id' => (int)$l['id'], 'label' => $label];
+  }
+  echo json_encode($out, JSON_UNESCAPED_SLASHES);
+  exit;
+},
+
 ];
