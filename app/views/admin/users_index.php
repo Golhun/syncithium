@@ -1,114 +1,68 @@
-<div class="flex items-center justify-between mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold">User Management</h1>
-    <p class="text-sm text-slate-600">Create users, disable or enable accounts, and reset passwords.</p>
+<?php
+/** @var array $users */
+/** @var string $q */
+?>
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-semibold">User Management</h1>
+    <div class="flex gap-2">
+      <a class="px-3 py-2 rounded-lg border border-gray-200" href="/public/index.php?r=admin_users_create">Create user</a>
+      <a class="px-3 py-2 rounded-lg border border-gray-200" href="/public/index.php?r=admin_users_bulk">Bulk import</a>
+    </div>
   </div>
 
-  <div class="flex flex-wrap gap-2 justify-end">
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_levels">
-      Taxonomy
-    </a>
-
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=password_reset_request">
-      Reset tokens
-    </a>
-
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_users_create">
-      Create user
-    </a>
-
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_users_bulk">
-      Bulk upload
-    </a>
-
-    <a class="rounded-lg bg-slate-900 text-white px-3 py-2 hover:opacity-95"
-       href="/public/index.php?r=logout">
-      Sign out
-    </a>
-  </div>
-</div>
-
-<div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
-  <form method="get" action="/public/index.php" class="flex gap-2">
+  <form method="get" class="mb-4">
     <input type="hidden" name="r" value="admin_users">
-    <input name="q" value="<?= e($q ?? '') ?>" placeholder="Search by email..."
-      class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400">
-    <button class="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-100">Search</button>
+    <div class="flex gap-2">
+      <input class="w-full px-3 py-2 rounded-lg border border-gray-200"
+             name="q" value="<?= htmlspecialchars((string)$q) ?>"
+             placeholder="Search by email">
+      <button class="px-3 py-2 rounded-lg border border-gray-200" type="submit">Search</button>
+    </div>
   </form>
-</div>
 
-<div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead class="bg-slate-50 border-b border-slate-200">
+  <div class="overflow-x-auto border border-gray-200 rounded-xl">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50">
         <tr>
           <th class="text-left p-3">Email</th>
           <th class="text-left p-3">Role</th>
           <th class="text-left p-3">Must change</th>
           <th class="text-left p-3">Status</th>
           <th class="text-left p-3">Created</th>
-          <th class="text-right p-3">Actions</th>
+          <th class="text-left p-3">Actions</th>
         </tr>
       </thead>
       <tbody>
+      <?php if (empty($users)): ?>
+        <tr><td class="p-3" colspan="6">No users found.</td></tr>
+      <?php else: ?>
         <?php foreach ($users as $u): ?>
-          <tr class="border-b border-slate-200 hover:bg-slate-50">
-            <td class="p-3"><?= e($u['email']) ?></td>
-            <td class="p-3"><?= e($u['role']) ?></td>
+          <tr class="border-t border-gray-200">
+            <td class="p-3"><?= htmlspecialchars((string)$u['email']) ?></td>
+            <td class="p-3"><?= htmlspecialchars((string)$u['role']) ?></td>
             <td class="p-3"><?= ((int)$u['must_change_password'] === 1) ? 'Yes' : 'No' ?></td>
-
+            <td class="p-3"><?= empty($u['disabled_at']) ? 'Active' : 'Disabled' ?></td>
+            <td class="p-3"><?= htmlspecialchars((string)$u['created_at']) ?></td>
             <td class="p-3">
-              <?php if (!empty($u['disabled_at'])): ?>
-                <span class="inline-flex items-center gap-1 text-xs bg-slate-200 px-2 py-1 rounded-full">
-                  <?= icon('no-symbol', 'w-4 h-4') ?> Disabled
-                </span>
-              <?php else: ?>
-                <span class="inline-flex items-center gap-1 text-xs bg-sky-100 px-2 py-1 rounded-full">
-                  Active
-                </span>
-              <?php endif; ?>
-            </td>
+              <form method="post" class="flex gap-2">
+                <?= csrf_field() ?>
+                <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
 
-            <td class="p-3"><?= e((string)$u['created_at']) ?></td>
-
-            <td class="p-3">
-              <div class="flex justify-end gap-2">
-                <form method="post" action="/public/index.php?r=admin_users">
-                  <?= csrf_field() ?>
-                  <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                  <input type="hidden" name="action" value="reset_password">
-                  <button class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-                    Reset password
-                  </button>
-                </form>
-
-                <?php if (!empty($u['disabled_at'])): ?>
-                  <form method="post" action="/public/index.php?r=admin_users">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                    <input type="hidden" name="action" value="enable">
-                    <button class="rounded-lg bg-slate-900 text-white px-3 py-1.5 hover:opacity-95">
-                      Enable
-                    </button>
-                  </form>
+                <?php if (empty($u['disabled_at'])): ?>
+                  <button class="px-2 py-1 rounded-lg border border-gray-200" name="action" value="disable">Disable</button>
                 <?php else: ?>
-                  <form method="post" action="/public/index.php?r=admin_users">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                    <input type="hidden" name="action" value="disable">
-                    <button class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-                      Disable
-                    </button>
-                  </form>
+                  <button class="px-2 py-1 rounded-lg border border-gray-200" name="action" value="enable">Enable</button>
                 <?php endif; ?>
-              </div>
+
+                <button class="px-2 py-1 rounded-lg border border-gray-200" name="action" value="reset_password">
+                  Reset password
+                </button>
+              </form>
             </td>
           </tr>
         <?php endforeach; ?>
+      <?php endif; ?>
       </tbody>
     </table>
   </div>
