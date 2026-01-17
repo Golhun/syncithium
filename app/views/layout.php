@@ -4,7 +4,7 @@ declare(strict_types=1);
 /** @var string $title */
 $title = $title ?? 'Syncithium';
 
-// Try to get current user if possible
+// Get current user if possible
 $u = null;
 try {
     if (isset($db) && $db instanceof PDO) {
@@ -14,7 +14,8 @@ try {
     $u = null;
 }
 
-$flash = flash_take(); // assumes your existing flash helper
+// Flash message (may be null)
+$flash = function_exists('flash_take') ? flash_take() : null;
 ?>
 <!doctype html>
 <html lang="en">
@@ -23,14 +24,12 @@ $flash = flash_take(); // assumes your existing flash helper
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= htmlspecialchars($title) ?></title>
 
-    <!-- Tailwind / app styles (local) -->
-    <!-- Make sure this file exists: public/assets/css/app.css (Tailwind build or simple CSS) -->
+    <!-- Tailwind + app CSS (local) -->
+    <link rel="stylesheet" href="/public/assets/css/tailwind.min.css">
     <link rel="stylesheet" href="/public/assets/css/app.css">
 
-    <!-- Alertify styles (local) -->
-    <!-- Make sure these files exist under public/assets/vendor/alertify/... -->
-    <link rel="stylesheet" href="/public/assets/vendor/alertify/css/alertify.min.css">
-    <link rel="stylesheet" href="/public/assets/vendor/alertify/css/themes/default.min.css">
+    <!-- Alertify CSS (local) -->
+    <link rel="stylesheet" href="/public/assets/css/alertify.min.css">
 </head>
 <body class="bg-gray-50 text-gray-900">
 
@@ -89,12 +88,10 @@ $flash = flash_take(); // assumes your existing flash helper
 </main>
 
 <!-- Alpine (local) -->
-<!-- Make sure this file exists: public/assets/vendor/alpine/alpine.min.js -->
-<script src="/public/assets/vendor/alpine/alpine.min.js" defer></script>
+<script src="/public/assets/js/alpine.min.js" defer></script>
 
 <!-- Alertify (local) -->
-<!-- Make sure this file exists: public/assets/vendor/alertify/alertify.min.js -->
-<script src="/public/assets/vendor/alertify/alertify.min.js"></script>
+<script src="/public/assets/js/alertify.min.js"></script>
 
 <?php if (!empty($flash) && is_array($flash)): ?>
     <script>
