@@ -1,116 +1,118 @@
-<div class="flex items-center justify-between mb-6">
-  <div>
-    <h1 class="text-2xl font-semibold">User Management</h1>
-    <p class="text-sm text-slate-600">Create users, disable or enable accounts, and reset passwords.</p>
-  </div>
+<?php
+declare(strict_types=1);
 
-  <div class="flex flex-wrap gap-2 justify-end">
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_levels">
-      Taxonomy
-    </a>
+return [
 
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=password_reset_request">
-      Reset tokens
-    </a>
+  'admin_users' => function (PDO $db, array $config): void {
+    $admin = require_admin($db);
 
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_users_create">
-      Create user
-    </a>
+    // Actions
+    if (is_post()) {
+      csrf_verify();
 
-    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_users_bulk">
-      Bulk upload
-    </a>
+      $action = (string)($_POST['action'] ?? '');
+      $userId = (int)($_POST['user_id'] ?? 0);
 
-    <a class="rounded-lg bg-slate-900 text-white px-3 py-2 hover:opacity-95"
-       href="/public/index.php?r=logout">
-      Sign out
-    </a>
-  </div>
-</div>
+      if ($userId <= 0) {
+        flash_set('error', 'Invalid user.');
+        redirect('/public/index.php?r=admin_users');
+      }
 
-<div class="bg-white border border-slate-200 rounded-xl p-4 mb-4">
-  <form method="get" action="/public/index.php" class="flex gap-2">
-    <input type="hidden" name="r" value="admin_users">
-    <input name="q" value="<?= e($q ?? '') ?>" placeholder="Search by email..."
-      class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400">
-    <button class="rounded-lg border border-slate-300 px-4 py-2 hover:bg-slate-100">Search</button>
-  </form>
-</div>
+      // Prevent self-disable
+      if ($action === 'disable' && $userId === (int)$admin['id']) {
+        flash_set('error', 'You cannot disable your own account.');
+        redirect('/public/index.php?r=admin_users');
+      }
 
-<div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-  <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-      <thead class="bg-slate-50 border-b border-slate-200">
-        <tr>
-          <th class="text-left p-3">Email</th>
-          <th class="text-left p-3">Role</th>
-          <th class="text-left p-3">Must change</th>
-          <th class="text-left p-3">Status</th>
-          <th class="text-left p-3">Created</th>
-          <th class="text-right p-3">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php foreach ($users as $u): ?>
-          <tr class="border-b border-slate-200 hover:bg-slate-50">
-            <td class="p-3"><?= e($u['email']) ?></td>
-            <td class="p-3"><?= e($u['role']) ?></td>
-            <td class="p-3"><?= ((int)$u['must_change_password'] === 1) ? 'Yes' : 'No' ?></td>
+      if ($action === 'disable') {
+        $stmt = $db->prepare("UPDATE users SET disabled_at = NOW() WHERE id = :id");
+        $stmt->execute([':id' => $userId]);
+        audit_log_event($db, (int)$admin['id'], 'USER_DISABLE', 'users', $userId);
+        flash_set('success', 'User disabled.');
+        redirect('/public/index.php?r=admin_users');
+      }
 
-            <td class="p-3">
-              <?php if (!empty($u['disabled_at'])): ?>
-                <span class="inline-flex items-center gap-1 text-xs bg-slate-200 px-2 py-1 rounded-full">
-                  <?= icon('no-symbol', 'w-4 h-4') ?> Disabled
-                </span>
-              <?php else: ?>
-                <span class="inline-flex items-center gap-1 text-xs bg-sky-100 px-2 py-1 rounded-full">
-                  Active
-                </span>
-              <?php endif; ?>
-            </td>
+      if ($action === 'enable') {
+        $stmt = $db->prepare("UPDATE users SET disabled_at = NULL WHERE id = :id");
+        $stmt->execute([':id' => $userId]);
+        audit_log_event($db, (int)$admin['id'], 'USER_ENABLE', 'users', $userId);
+        flash_set('success', 'User enabled.');
+        redirect('/public/index.php?r=admin_users');
+      }
 
-            <td class="p-3"><?= e((string)$u['created_at']) ?></td>
+      /**
+       * IMPORTANT CHANGE:
+       * Do NOT show temp passwords in Alertify flash.
+       * Use your one-time reveal screen.
+       */
+      if ($action === 'reset_password') {
+        $temp = random_password(14);
+        $hash = password_hash($temp, PASSWORD_DEFAULT);
 
-            <td class="p-3">
-              <div class="flex justify-end gap-2">
-                <form method="post" action="/public/index.php?r=admin_users">
-                  <?= csrf_field() ?>
-                  <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                  <input type="hidden" name="email_hint" value="<?= e($u['email']) ?>">
-                  <input type="hidden" name="action" value="reset_password">
-                  <button class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-                    Reset password
-                  </button>
-                </form>
+        $stmt = $db->prepare("
+          UPDATE users
+          SET password_hash = :h, must_change_password = 1
+          WHERE id = :id
+        ");
+        $stmt->execute([':h' => $hash, ':id' => $userId]);
 
-                <?php if (!empty($u['disabled_at'])): ?>
-                  <form method="post" action="/public/index.php?r=admin_users">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                    <input type="hidden" name="action" value="enable">
-                    <button class="rounded-lg bg-slate-900 text-white px-3 py-1.5 hover:opacity-95">
-                      Enable
-                    </button>
-                  </form>
-                <?php else: ?>
-                  <form method="post" action="/public/index.php?r=admin_users">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                    <input type="hidden" name="action" value="disable">
-                    <button class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-                      Disable
-                    </button>
-                  </form>
-                <?php endif; ?>
-              </div>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  </div>
-</div>
+        audit_log_event($db, (int)$admin['id'], 'USER_PASSWORD_RESET', 'users', $userId, [
+          'must_change_password' => 1
+        ]);
+
+        reveal_set([
+          'label' => 'One-time temp password (share securely)',
+          'secret_label' => 'Temp password',
+          'secret' => $temp,
+          'meta' => ['user_id' => $userId]
+        ]);
+
+        redirect('/public/index.php?r=admin_credential_reveal');
+      }
+
+      flash_set('error', 'Unknown action.');
+      redirect('/public/index.php?r=admin_users');
+    }
+
+    // Listing
+    $q = trim((string)($_GET['q'] ?? ''));
+    if ($q !== '') {
+      $stmt = $db->prepare("
+        SELECT id, email, role, must_change_password, created_at, disabled_at
+        FROM users
+        WHERE email LIKE :q
+        ORDER BY created_at DESC
+        LIMIT 200
+      ");
+      $stmt->execute([':q' => "%{$q}%"]);
+    } else {
+      $stmt = $db->prepare("
+        SELECT id, email, role, must_change_password, created_at, disabled_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 200
+      ");
+      $stmt->execute();
+    }
+
+    $users = $stmt->fetchAll() ?: [];
+
+    render('admin/users_index', [
+      'title' => 'User Management',
+      'admin' => $admin,
+      'users' => $users,
+      'q' => $q,
+    ]);
+  },
+
+  'admin_credential_reveal' => function (PDO $db, array $config): void {
+    require_admin($db);
+    $reveal = reveal_take();
+
+    render('admin/credential_reveal', [
+      'title' => 'One-time Credentials',
+      'reveal' => $reveal,
+    ]);
+  },
+
+];
