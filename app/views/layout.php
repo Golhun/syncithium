@@ -47,6 +47,12 @@ $flash = function_exists('flash_take') ? flash_take() : null;
 
         <?php if ($u): ?>
             <nav class="flex items-center gap-2 text-sm">
+                <!-- Quiz visible to all logged in users -->
+                <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                   href="/public/index.php?r=quiz_start">
+                    Quiz
+                </a>
+
                 <?php if (($u['role'] ?? 'user') === 'admin'): ?>
                     <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
                        href="/public/index.php?r=admin_users">
