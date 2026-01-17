@@ -23,6 +23,12 @@
       Sign in
     </button>
 
+    <p class="text-sm text-slate-600 mt-4">
+  Have a reset token?
+  <a class="underline" href="/public/index.php?r=password_reset">Reset your password</a>
+</p>
+
+
     <p class="text-xs text-slate-500 mt-3">
       No public registration. If you need access, contact an admin.
     </p>

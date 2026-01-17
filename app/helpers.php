@@ -45,3 +45,20 @@ function icon(string $name, string $classes = 'w-5 h-5'): string {
   $svg = preg_replace('/<svg\b([^>]*)>/', '<svg$1 class="'.e($classes).'">', $svg, 1) ?? $svg;
   return $svg;
 }
+
+
+function base64url_encode(string $bin): string {
+  return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
+}
+
+function make_reset_token(): string {
+  // 32 bytes => 256-bit entropy, exceeds OWASP minimum guidance
+  return base64url_encode(random_bytes(32));
+}
+
+function reset_token_hash(string $token, array $config): string {
+  $pepper = (string)($config['security']['reset_token_pepper'] ?? '');
+  // HMAC-SHA256, store hex
+  return hash_hmac('sha256', $token, $pepper);
+}
+

@@ -292,6 +292,206 @@ switch ($route) {
     break;
   }
 
+  case 'password_reset_request': {
+  $admin = require_admin($db);
+
+  $generated = null; // show token once
+  $users = [];
+
+  // simple search to pick a user
+  $q = trim((string)($_GET['q'] ?? ''));
+  if ($q !== '') {
+    $stmt = $db->prepare("SELECT id, email, role, disabled_at FROM users WHERE email LIKE :q ORDER BY created_at DESC LIMIT 50");
+    $stmt->execute([':q' => "%{$q}%"]);
+    $users = $stmt->fetchAll();
+  }
+
+  if (is_post()) {
+    csrf_verify();
+    $action = (string)($_POST['action'] ?? '');
+
+    if ($action === 'generate') {
+      $userId = (int)($_POST['user_id'] ?? 0);
+      if ($userId <= 0) {
+        flash_set('error', 'Select a valid user.');
+        redirect('/public/index.php?r=password_reset_request');
+      }
+
+      // refuse if target user is disabled
+      $stmt = $db->prepare("SELECT id, email, disabled_at FROM users WHERE id = :id LIMIT 1");
+      $stmt->execute([':id' => $userId]);
+      $target = $stmt->fetch();
+      if (!$target || !empty($target['disabled_at'])) {
+        flash_set('error', 'User not found or is disabled.');
+        redirect('/public/index.php?r=password_reset_request');
+      }
+
+      // invalidate any existing active tokens for this user
+      $stmt = $db->prepare("UPDATE password_resets SET used_at = NOW()
+                            WHERE user_id = :uid AND used_at IS NULL AND expires_at > NOW()");
+      $stmt->execute([':uid' => $userId]);
+
+      $ttlMin = (int)($config['security']['reset_token_ttl_minutes'] ?? 60);
+
+      $token = make_reset_token();
+      $tokenHash = reset_token_hash($token, $config);
+
+      $stmt = $db->prepare("INSERT INTO password_resets (user_id, token_hash, expires_at)
+                            VALUES (:uid, :th, DATE_ADD(NOW(), INTERVAL :ttl MINUTE))");
+      $stmt->execute([':uid' => $userId, ':th' => $tokenHash, ':ttl' => $ttlMin]);
+
+      audit_log_event($db, (int)$admin['id'], 'PASSWORD_RESET_TOKEN_GENERATE', 'users', $userId, [
+        'ttl_minutes' => $ttlMin
+      ]);
+
+      $generated = [
+        'email' => (string)$target['email'],
+        'token' => $token,
+        'ttl_minutes' => $ttlMin,
+      ];
+
+      flash_set('success', 'Reset token generated. Copy it now, it will not be shown again.');
+    }
+
+    if ($action === 'admin_reset_on_behalf') {
+      $token = trim((string)($_POST['token'] ?? ''));
+      $p1 = (string)($_POST['password'] ?? '');
+      $p2 = (string)($_POST['password_confirm'] ?? '');
+      $forceChange = (int)($_POST['force_change'] ?? 1); // default yes
+
+      $minLen = (int)($config['security']['password_min_len'] ?? 10);
+
+      if ($token === '') {
+        flash_set('error', 'Token is required.');
+        redirect('/public/index.php?r=password_reset_request');
+      }
+      if (strlen($p1) < $minLen) {
+        flash_set('error', "Password must be at least {$minLen} characters.");
+        redirect('/public/index.php?r=password_reset_request');
+      }
+      if ($p1 !== $p2) {
+        flash_set('error', 'Passwords do not match.');
+        redirect('/public/index.php?r=password_reset_request');
+      }
+
+      $th = reset_token_hash($token, $config);
+
+      $stmt = $db->prepare("
+        SELECT pr.id AS pr_id, pr.user_id, pr.expires_at, pr.used_at, u.disabled_at
+        FROM password_resets pr
+        JOIN users u ON u.id = pr.user_id
+        WHERE pr.token_hash = :th
+        LIMIT 1
+      ");
+      $stmt->execute([':th' => $th]);
+      $row = $stmt->fetch();
+
+      // generic failure, do not disclose details
+      if (!$row || !empty($row['used_at']) || strtotime((string)$row['expires_at']) <= time() || !empty($row['disabled_at'])) {
+        flash_set('error', 'Token is invalid or expired.');
+        redirect('/public/index.php?r=password_reset_request');
+      }
+
+      $hash = password_hash($p1, PASSWORD_DEFAULT);
+      $mustChange = ($forceChange === 1) ? 1 : 0;
+
+      $stmt = $db->prepare("UPDATE users
+                            SET password_hash = :h,
+                                must_change_password = :mcp,
+                                failed_attempts = 0,
+                                last_failed_at = NULL,
+                                lockout_until = NULL
+                            WHERE id = :uid");
+      $stmt->execute([':h' => $hash, ':mcp' => $mustChange, ':uid' => (int)$row['user_id']]);
+
+      $stmt = $db->prepare("UPDATE password_resets SET used_at = NOW() WHERE id = :id");
+      $stmt->execute([':id' => (int)$row['pr_id']]);
+
+      audit_log_event($db, (int)$admin['id'], 'PASSWORD_RESET_ADMIN_ON_BEHALF', 'users', (int)$row['user_id'], [
+        'force_change' => $mustChange
+      ]);
+
+      flash_set('success', 'Password reset completed using token.');
+      redirect('/public/index.php?r=password_reset_request');
+    }
+  }
+
+  render('admin/password_reset_request', [
+    'title' => 'Password Reset Tokens',
+    'admin' => $admin,
+    'users' => $users,
+    'q' => $q,
+    'generated' => $generated,
+  ]);
+  break;
+}
+
+case 'password_reset': {
+  if (is_post()) {
+    csrf_verify();
+
+    $token = trim((string)($_POST['token'] ?? ''));
+    $p1 = (string)($_POST['password'] ?? '');
+    $p2 = (string)($_POST['password_confirm'] ?? '');
+
+    $minLen = (int)($config['security']['password_min_len'] ?? 10);
+
+    if ($token === '') {
+      flash_set('error', 'Token is required.');
+      redirect('/public/index.php?r=password_reset');
+    }
+    if (strlen($p1) < $minLen) {
+      flash_set('error', "Password must be at least {$minLen} characters.");
+      redirect('/public/index.php?r=password_reset');
+    }
+    if ($p1 !== $p2) {
+      flash_set('error', 'Passwords do not match.');
+      redirect('/public/index.php?r=password_reset');
+    }
+
+    $th = reset_token_hash($token, $config);
+
+    $stmt = $db->prepare("
+      SELECT pr.id AS pr_id, pr.user_id, pr.expires_at, pr.used_at, u.disabled_at
+      FROM password_resets pr
+      JOIN users u ON u.id = pr.user_id
+      WHERE pr.token_hash = :th
+      LIMIT 1
+    ");
+    $stmt->execute([':th' => $th]);
+    $row = $stmt->fetch();
+
+    // generic failure
+    if (!$row || !empty($row['used_at']) || strtotime((string)$row['expires_at']) <= time() || !empty($row['disabled_at'])) {
+      flash_set('error', 'Token is invalid or expired.');
+      redirect('/public/index.php?r=password_reset');
+    }
+
+    $hash = password_hash($p1, PASSWORD_DEFAULT);
+
+    $stmt = $db->prepare("UPDATE users
+                          SET password_hash = :h,
+                              must_change_password = 0,
+                              failed_attempts = 0,
+                              last_failed_at = NULL,
+                              lockout_until = NULL
+                          WHERE id = :uid");
+    $stmt->execute([':h' => $hash, ':uid' => (int)$row['user_id']]);
+
+    $stmt = $db->prepare("UPDATE password_resets SET used_at = NOW() WHERE id = :id");
+    $stmt->execute([':id' => (int)$row['pr_id']]);
+
+    audit_log_event($db, null, 'PASSWORD_RESET_TOKEN_USED', 'users', (int)$row['user_id']);
+
+    flash_set('success', 'Password updated. You can sign in now.');
+    redirect('/public/index.php?r=login');
+  }
+
+  render('auth/password_reset', ['title' => 'Reset password']);
+  break;
+}
+
+
   default:
     http_response_code(404);
     echo "Not Found";
