@@ -1,11 +1,13 @@
 <?php
-require_admin($config);
+require_admin();
+
 $title = 'Admin: Import questions';
-$base = base_url($config);
-$pdo = db_connect($config['db']);
+$base = rtrim(base_url(), '/');
+$pdo  = db();
 
 $stats = null;
 $errors = [];
+
 
 function normalize_correct_option(string $v): ?string {
     $v = strtoupper(trim($v));

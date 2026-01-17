@@ -104,3 +104,34 @@ function csrf_verify_or_abort(): void
         exit;
     }
 }
+
+
+/**
+ * Flash messages (stored in session, shown once).
+ */
+function flash_set(string $key, string $message): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    if (!isset($_SESSION['_flash']) || !is_array($_SESSION['_flash'])) {
+        $_SESSION['_flash'] = [];
+    }
+    $_SESSION['_flash'][$key] = $message;
+}
+
+function flash_get(string $key): ?string
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    if (empty($_SESSION['_flash']) || !is_array($_SESSION['_flash'])) {
+        return null;
+    }
+    if (!array_key_exists($key, $_SESSION['_flash'])) {
+        return null;
+    }
+    $msg = (string)$_SESSION['_flash'][$key];
+    unset($_SESSION['_flash'][$key]);
+    return $msg;
+}
