@@ -1,10 +1,27 @@
 <?php
+declare(strict_types=1);
 
 return new class implements MigrationInterface
 {
     private function driver(PDO $pdo): string
     {
         return (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+    }
+
+    private function hasTable(PDO $pdo, string $table): bool
+    {
+        $d = $this->driver($pdo);
+
+        if ($d === 'mysql') {
+            $stmt = $pdo->prepare("SHOW TABLES LIKE :t");
+            $stmt->execute([':t' => $table]);
+            return (bool)$stmt->fetchColumn();
+        }
+
+        // SQLite
+        $stmt = $pdo->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=:t");
+        $stmt->execute([':t' => $table]);
+        return (bool)$stmt->fetchColumn();
     }
 
     private function hasColumn(PDO $pdo, string $table, string $col): bool
@@ -17,7 +34,7 @@ return new class implements MigrationInterface
             return (bool)$stmt->fetch();
         }
 
-        // sqlite
+        // SQLite
         $stmt = $pdo->query("PRAGMA table_info({$table})");
         $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
         foreach ($rows as $r) {
@@ -28,38 +45,45 @@ return new class implements MigrationInterface
 
     private function addColumn(PDO $pdo, string $table, string $sqlFragment): void
     {
-        // SQL fragment must be: "<col> <type> ..."
-        $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$sqlFragment}");
+        // sqlFragment example: "must_change_password TINYINT(1) NOT NULL DEFAULT 1"
+        $pdo->exec("ALTER TABLE `{$table}` ADD COLUMN {$sqlFragment}");
     }
 
     public function up(PDO $pdo): void
     {
-        // Ensure users table exists (minimal guard)
-        $pdo->exec("
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        ");
-
-        // Add admin-related columns (safe if already present)
-        if (!$this->hasColumn($pdo, 'users', 'is_admin')) {
-            $this->addColumn($pdo, 'users', "is_admin INTEGER NOT NULL DEFAULT 0");
-        }
-        if (!$this->hasColumn($pdo, 'users', 'must_change_password')) {
-            $this->addColumn($pdo, 'users', "must_change_password INTEGER NOT NULL DEFAULT 1");
-        }
-        if (!$this->hasColumn($pdo, 'users', 'disabled_at')) {
-            $this->addColumn($pdo, 'users', "disabled_at TEXT NULL");
-        }
-        if (!$this->hasColumn($pdo, 'users', 'updated_at')) {
-            $this->addColumn($pdo, 'users', "updated_at TEXT NULL");
+        // We assume users table already exists (you have schema.sql creating it).
+        if (!$this->hasTable($pdo, 'users')) {
+            throw new RuntimeException("users table not found. Run your base schema/initial migration first.");
         }
 
-        // Password reset tokens table (admin generated)
         $d = $this->driver($pdo);
+
+        // Add columns to users if missing
+        if (!$this->hasColumn($pdo, 'users', 'must_change_password')) {
+            if ($d === 'mysql') {
+                $this->addColumn($pdo, 'users', "must_change_password TINYINT(1) NOT NULL DEFAULT 1");
+            } else {
+                $pdo->exec("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 1");
+            }
+        }
+
+        if (!$this->hasColumn($pdo, 'users', 'disabled_at')) {
+            if ($d === 'mysql') {
+                $this->addColumn($pdo, 'users', "disabled_at DATETIME NULL");
+            } else {
+                $pdo->exec("ALTER TABLE users ADD COLUMN disabled_at TEXT NULL");
+            }
+        }
+
+        if (!$this->hasColumn($pdo, 'users', 'updated_at')) {
+            if ($d === 'mysql') {
+                $this->addColumn($pdo, 'users', "updated_at DATETIME NULL");
+            } else {
+                $pdo->exec("ALTER TABLE users ADD COLUMN updated_at TEXT NULL");
+            }
+        }
+
+        // Create password_resets table
         if ($d === 'mysql') {
             $pdo->exec("
                 CREATE TABLE IF NOT EXISTS password_resets (
@@ -91,7 +115,7 @@ return new class implements MigrationInterface
 
     public function down(PDO $pdo): void
     {
-        // Safe rollback for new table only (columns are left as-is)
+        // Safe rollback: remove reset table (we do not drop columns to avoid data loss)
         $pdo->exec("DROP TABLE IF EXISTS password_resets");
     }
 };
