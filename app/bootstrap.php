@@ -10,6 +10,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/helpers/auth_redirect.php';
 require_once __DIR__ . '/reveal.php';
+require_once __DIR__ . '/questions.php';
 
 
 init_session($config);
