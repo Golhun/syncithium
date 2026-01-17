@@ -1,0 +1,531 @@
+<?php
+declare(strict_types=1);
+
+return [
+
+    // -------------------------
+    // Quiz: start (select topics, timer, scoring)
+    // GET = show form, POST = create attempt
+    // -------------------------
+    'quiz_start' => function (PDO $db, array $config): void {
+        $user = require_login($db);
+
+        // Optional preset: Level 200, GEM 201
+        $presetLevelId  = null;
+        $presetModuleId = null;
+
+        $preset = (string)($_GET['preset'] ?? '');
+        if ($preset === 'gem201') {
+            // Find level with code '200'
+            $stmt = $db->prepare("SELECT id FROM levels WHERE code = :code LIMIT 1");
+            $stmt->execute([':code' => '200']);
+            if ($row = $stmt->fetch()) {
+                $presetLevelId = (int)$row['id'];
+
+                // Find module GEM 201 inside this level
+                $stmt = $db->prepare("
+                    SELECT m.id
+                    FROM modules m
+                    WHERE m.level_id = :lid AND m.code = :code
+                    LIMIT 1
+                ");
+                $stmt->execute([':lid' => $presetLevelId, ':code' => 'GEM 201']);
+                if ($m = $stmt->fetch()) {
+                    $presetModuleId = (int)$m['id'];
+                }
+            }
+        }
+
+        // Handle POST: create attempt
+        if (is_post()) {
+            csrf_verify();
+
+            $topicIds = $_POST['topic_ids'] ?? [];
+            if (!is_array($topicIds)) {
+                $topicIds = [];
+            }
+
+            $topicIds = array_values(array_unique(array_filter(
+                array_map(static fn($v) => (int)$v, $topicIds),
+                static fn($v) => $v > 0
+            )));
+
+            if (count($topicIds) === 0) {
+                flash_set('error', 'Select at least one topic.');
+                redirect('/public/index.php?r=quiz_start');
+            }
+
+            $numQuestions = (int)($_POST['num_questions'] ?? 20);
+            if ($numQuestions < 1) $numQuestions = 1;
+            if ($numQuestions > 200) $numQuestions = 200;
+
+            $scoringMode = (string)($_POST['scoring_mode'] ?? 'standard');
+            if (!in_array($scoringMode, ['standard', 'negative'], true)) {
+                $scoringMode = 'standard';
+            }
+
+            $timerSeconds = (int)($_POST['timer_seconds'] ?? 3600);
+            $allowedTimers = [1800, 2700, 3600, 5400];
+            if (!in_array($timerSeconds, $allowedTimers, true)) {
+                $timerSeconds = 3600;
+            }
+
+            // Fetch random questions from selected topics
+            $placeholders = implode(',', array_fill(0, count($topicIds), '?'));
+            $params = $topicIds;
+            $params[] = $numQuestions;
+
+            $stmt = $db->prepare("
+                SELECT id
+                FROM questions
+                WHERE status = 'active'
+                  AND topic_id IN ($placeholders)
+                ORDER BY RAND()
+                LIMIT ?
+            ");
+            $stmt->execute($params);
+            $questionIds = $stmt->fetchAll(PDO::FETCH_COLUMN, 0) ?: [];
+
+            if (count($questionIds) === 0) {
+                flash_set('error', 'No active questions found for the selected topics.');
+                redirect('/public/index.php?r=quiz_start');
+            }
+
+            $totalQuestions = count($questionIds);
+
+            // Create attempt and attempt_questions in one transaction
+            $db->beginTransaction();
+            try {
+                $stmt = $db->prepare("
+                    INSERT INTO attempts (
+                        user_id,
+                        scoring_mode,
+                        timer_seconds,
+                        status,
+                        started_at,
+                        created_at,
+                        updated_at,
+                        total_questions
+                    ) VALUES (
+                        :uid,
+                        :mode,
+                        :timer,
+                        'in_progress',
+                        NOW(),
+                        NOW(),
+                        NOW(),
+                        :total
+                    )
+                ");
+                $stmt->execute([
+                    ':uid'   => (int)$user['id'],
+                    ':mode'  => $scoringMode,
+                    ':timer' => $timerSeconds,
+                    ':total' => $totalQuestions,
+                ]);
+
+                $attemptId = (int)$db->lastInsertId();
+
+                $stmtQ = $db->prepare("
+                    INSERT INTO attempt_questions (
+                        attempt_id,
+                        question_id,
+                        position,
+                        created_at,
+                        updated_at
+                    ) VALUES (
+                        :aid,
+                        :qid,
+                        :pos,
+                        NOW(),
+                        NOW()
+                    )
+                ");
+
+                $pos = 1;
+                foreach ($questionIds as $qid) {
+                    $stmtQ->execute([
+                        ':aid' => $attemptId,
+                        ':qid' => (int)$qid,
+                        ':pos' => $pos++,
+                    ]);
+                }
+
+                $db->commit();
+                redirect('/public/index.php?r=quiz_take&id=' . $attemptId);
+            } catch (Throwable $e) {
+                $db->rollBack();
+                flash_set('error', 'Could not create quiz: ' . $e->getMessage());
+                redirect('/public/index.php?r=quiz_start');
+            }
+        }
+
+        render('quiz/start', [
+            'title'          => 'Start Quiz',
+            'user'           => $user,
+            'presetLevelId'  => $presetLevelId,
+            'presetModuleId' => $presetModuleId,
+        ]);
+    },
+
+    // -------------------------
+    // Quiz: take (answer and submit)
+    // GET = show questions, POST = submit answers and score
+    // -------------------------
+    'quiz_take' => function (PDO $db, array $config): void {
+        $user = require_login($db);
+
+        $attemptId = (int)($_GET['id'] ?? ($_POST['id'] ?? 0));
+        if ($attemptId <= 0) {
+            flash_set('error', 'Invalid attempt.');
+            redirect('/public/index.php');
+        }
+
+        $stmt = $db->prepare("SELECT * FROM attempts WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $attemptId]);
+        $attempt = $stmt->fetch();
+
+        if (!$attempt || (int)$attempt['user_id'] !== (int)$user['id']) {
+            flash_set('error', 'Attempt not found.');
+            redirect('/public/index.php');
+        }
+
+        // If already submitted, go straight to review
+        if ($attempt['status'] === 'submitted') {
+            redirect('/public/index.php?r=quiz_review&id=' . $attemptId);
+        }
+
+        // Compute remaining time
+        $timerSeconds = (int)$attempt['timer_seconds'];
+        $startedAt    = new DateTime((string)$attempt['started_at']);
+        $now          = new DateTime('now');
+        $elapsed      = $now->getTimestamp() - $startedAt->getTimestamp();
+        $remaining    = $timerSeconds - $elapsed;
+        if ($remaining < 0) {
+            $remaining = 0;
+        }
+
+        // If time is over and not yet submitted, auto finalise as is
+        if ($remaining === 0 && $attempt['status'] === 'in_progress' && !is_post()) {
+            // Finalise with current answers (if any)
+            $db->beginTransaction();
+            try {
+                // Compute scores
+                $stats = [
+                    'correct' => 0,
+                    'wrong'   => 0,
+                    'total'   => (int)$attempt['total_questions'],
+                    'score'   => 0,
+                ];
+
+                $stmtQ = $db->prepare("
+                    SELECT aq.id, aq.selected_option, q.correct_option
+                    FROM attempt_questions aq
+                    JOIN questions q ON q.id = aq.question_id
+                    WHERE aq.attempt_id = :aid
+                    ORDER BY aq.position ASC
+                ");
+                $stmtQ->execute([':aid' => $attemptId]);
+                $rows = $stmtQ->fetchAll() ?: [];
+
+                $updateQ = $db->prepare("
+                    UPDATE attempt_questions
+                    SET selected_option = :sel,
+                        is_correct = :is_correct,
+                        updated_at = NOW()
+                    WHERE id = :id
+                ");
+
+                foreach ($rows as $row) {
+                    $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
+                    if (!in_array($sel, ['A','B','C','D'], true)) {
+                        $sel = null;
+                    }
+
+                    $isCorrect = null;
+                    if ($sel !== null) {
+                        $isCorrect = ($sel === strtoupper((string)$row['correct_option'])) ? 1 : 0;
+                    }
+
+                    if ($isCorrect === 1) {
+                        $stats['correct']++;
+                    } elseif ($isCorrect === 0) {
+                        $stats['wrong']++;
+                    }
+
+                    $updateQ->execute([
+                        ':sel'        => $sel,
+                        ':is_correct' => $isCorrect,
+                        ':id'         => (int)$row['id'],
+                    ]);
+                }
+
+                // Score calculation
+                if ($attempt['scoring_mode'] === 'negative') {
+                    $stats['score'] = $stats['correct'] - $stats['wrong'];
+                } else {
+                    $stats['score'] = $stats['correct'];
+                }
+
+                $stmtU = $db->prepare("
+                    UPDATE attempts
+                    SET status = 'submitted',
+                        submitted_at = NOW(),
+                        raw_correct = :c,
+                        raw_wrong = :w,
+                        score = :s,
+                        updated_at = NOW()
+                    WHERE id = :id
+                ");
+                $stmtU->execute([
+                    ':c'  => $stats['correct'],
+                    ':w'  => $stats['wrong'],
+                    ':s'  => $stats['score'],
+                    ':id' => $attemptId,
+                ]);
+
+                $db->commit();
+            } catch (Throwable $e) {
+                $db->rollBack();
+                flash_set('error', 'Could not finalise attempt: ' . $e->getMessage());
+            }
+
+            redirect('/public/index.php?r=quiz_review&id=' . $attemptId);
+        }
+
+        // Handle POST submission from the form
+        if (is_post()) {
+            csrf_verify();
+
+            $answers = $_POST['answers'] ?? [];
+            if (!is_array($answers)) {
+                $answers = [];
+            }
+
+            $db->beginTransaction();
+            try {
+                // Update selected options
+                $stmtUpdate = $db->prepare("
+                    UPDATE attempt_questions
+                    SET selected_option = :sel,
+                        updated_at = NOW()
+                    WHERE id = :id AND attempt_id = :aid
+                ");
+
+                foreach ($answers as $aqid => $sel) {
+                    $aqid = (int)$aqid;
+                    if ($aqid <= 0) continue;
+
+                    $opt = strtoupper(trim((string)$sel));
+                    if (!in_array($opt, ['A','B','C','D'], true)) {
+                        $opt = null;
+                    }
+
+                    $stmtUpdate->execute([
+                        ':sel' => $opt,
+                        ':id'  => $aqid,
+                        ':aid' => $attemptId,
+                    ]);
+                }
+
+                // Compute scores
+                $stats = [
+                    'correct' => 0,
+                    'wrong'   => 0,
+                    'total'   => (int)$attempt['total_questions'],
+                    'score'   => 0,
+                ];
+
+                $stmtQ = $db->prepare("
+                    SELECT aq.id, aq.selected_option, q.correct_option
+                    FROM attempt_questions aq
+                    JOIN questions q ON q.id = aq.question_id
+                    WHERE aq.attempt_id = :aid
+                    ORDER BY aq.position ASC
+                ");
+                $stmtQ->execute([':aid' => $attemptId]);
+                $rows = $stmtQ->fetchAll() ?: [];
+
+                $updateQ = $db->prepare("
+                    UPDATE attempt_questions
+                    SET is_correct = :is_correct,
+                        updated_at = NOW()
+                    WHERE id = :id
+                ");
+
+                foreach ($rows as $row) {
+                    $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
+                    if (!in_array($sel, ['A','B','C','D'], true)) {
+                        $sel = null;
+                    }
+
+                    $isCorrect = null;
+                    if ($sel !== null) {
+                        $isCorrect = ($sel === strtoupper((string)$row['correct_option'])) ? 1 : 0;
+                    }
+
+                    if ($isCorrect === 1) {
+                        $stats['correct']++;
+                    } elseif ($isCorrect === 0) {
+                        $stats['wrong']++;
+                    }
+
+                    $updateQ->execute([
+                        ':is_correct' => $isCorrect,
+                        ':id'         => (int)$row['id'],
+                    ]);
+                }
+
+                if ($attempt['scoring_mode'] === 'negative') {
+                    $stats['score'] = $stats['correct'] - $stats['wrong'];
+                } else {
+                    $stats['score'] = $stats['correct'];
+                }
+
+                $stmtU = $db->prepare("
+                    UPDATE attempts
+                    SET status = 'submitted',
+                        submitted_at = NOW(),
+                        raw_correct = :c,
+                        raw_wrong   = :w,
+                        score       = :s,
+                        updated_at  = NOW()
+                    WHERE id = :id
+                ");
+                $stmtU->execute([
+                    ':c'  => $stats['correct'],
+                    ':w'  => $stats['wrong'],
+                    ':s'  => $stats['score'],
+                    ':id' => $attemptId,
+                ]);
+
+                $db->commit();
+                redirect('/public/index.php?r=quiz_review&id=' . $attemptId);
+            } catch (Throwable $e) {
+                $db->rollBack();
+                flash_set('error', 'Could not submit quiz: ' . $e->getMessage());
+                redirect('/public/index.php?r=quiz_take&id=' . $attemptId);
+            }
+        }
+
+        // GET: load questions for display
+        $stmt = $db->prepare("
+            SELECT
+              aq.id AS aq_id,
+              aq.selected_option,
+              q.id   AS question_id,
+              q.question_text,
+              q.option_a,
+              q.option_b,
+              q.option_c,
+              q.option_d,
+              q.correct_option,
+              t.name AS topic_name
+            FROM attempt_questions aq
+            JOIN questions q ON q.id = aq.question_id
+            JOIN topics t    ON t.id = q.topic_id
+            WHERE aq.attempt_id = :aid
+            ORDER BY aq.position ASC
+        ");
+        $stmt->execute([':aid' => $attemptId]);
+        $questions = $stmt->fetchAll() ?: [];
+
+        render('quiz/take', [
+            'title'            => 'Take Quiz',
+            'attempt'          => $attempt,
+            'questions'        => $questions,
+            'remainingSeconds' => $remaining,
+        ]);
+    },
+
+    // -------------------------
+    // Quiz: review (see answers, per-topic performance)
+    // -------------------------
+    'quiz_review' => function (PDO $db, array $config): void {
+        $user = require_login($db);
+
+        $attemptId = (int)($_GET['id'] ?? 0);
+        if ($attemptId <= 0) {
+            flash_set('error', 'Invalid attempt.');
+            redirect('/public/index.php');
+        }
+
+        $stmt = $db->prepare("SELECT * FROM attempts WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $attemptId]);
+        $attempt = $stmt->fetch();
+
+        if (!$attempt || (int)$attempt['user_id'] !== (int)$user['id']) {
+            flash_set('error', 'Attempt not found.');
+            redirect('/public/index.php');
+        }
+
+        // Load per-question details
+        $stmt = $db->prepare("
+            SELECT
+              aq.id AS aq_id,
+              aq.selected_option,
+              aq.is_correct,
+              q.question_text,
+              q.option_a,
+              q.option_b,
+              q.option_c,
+              q.option_d,
+              q.correct_option,
+              t.name     AS topic_name,
+              s.name     AS subject_name,
+              m.code     AS module_code,
+              l.code     AS level_code
+            FROM attempt_questions aq
+            JOIN questions q ON q.id = aq.question_id
+            JOIN topics   t  ON t.id = q.topic_id
+            JOIN subjects s  ON s.id = t.subject_id
+            JOIN modules  m  ON m.id = s.module_id
+            JOIN levels   l  ON l.id = m.level_id
+            WHERE aq.attempt_id = :aid
+            ORDER BY aq.position ASC
+        ");
+        $stmt->execute([':aid' => $attemptId]);
+        $questions = $stmt->fetchAll() ?: [];
+
+        // Aggregated performance by topic / subject / module / level
+        $stmt = $db->prepare("
+            SELECT
+              t.id       AS topic_id,
+              t.name     AS topic_name,
+              s.name     AS subject_name,
+              m.code     AS module_code,
+              l.code     AS level_code,
+              SUM(CASE WHEN aq.is_correct = 1 THEN 1 ELSE 0 END) AS correct_count,
+              SUM(CASE WHEN aq.is_correct = 0 THEN 1 ELSE 0 END) AS wrong_count,
+              COUNT(*) AS total
+            FROM attempt_questions aq
+            JOIN questions q ON q.id = aq.question_id
+            JOIN topics   t  ON t.id = q.topic_id
+            JOIN subjects s  ON s.id = t.subject_id
+            JOIN modules  m  ON m.id = s.module_id
+            JOIN levels   l  ON l.id = m.level_id
+            WHERE aq.attempt_id = :aid
+            GROUP BY
+              t.id,
+              t.name,
+              s.name,
+              m.code,
+              l.code
+            ORDER BY
+              l.code,
+              m.code,
+              s.name,
+              t.name
+        ");
+        $stmt->execute([':aid' => $attemptId]);
+        $topicStats = $stmt->fetchAll() ?: [];
+
+        render('quiz/review', [
+            'title'      => 'Quiz Review',
+            'attempt'    => $attempt,
+            'questions'  => $questions,
+            'topicStats' => $topicStats,
+        ]);
+    },
+
+];

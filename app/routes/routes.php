@@ -36,4 +36,6 @@ $load('taxonomy_user.php');
 // Question bank admin (list, edit, import)
 $load('questions_admin.php');
 
+$load('quiz_user.php');
+
 return $routes;

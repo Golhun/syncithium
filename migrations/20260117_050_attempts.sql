@@ -1,0 +1,30 @@
+CREATE TABLE attempts (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  scoring_mode ENUM('standard','negative') NOT NULL DEFAULT 'standard',
+  timer_seconds INT UNSIGNED NOT NULL,
+  started_at DATETIME NOT NULL,
+  submitted_at DATETIME NULL,
+  total_questions INT UNSIGNED NOT NULL DEFAULT 0,
+  score INT NOT NULL DEFAULT 0,
+  raw_correct INT UNSIGNED NOT NULL DEFAULT 0,
+  raw_wrong INT UNSIGNED NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_attempts_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE attempt_questions (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  attempt_id INT UNSIGNED NOT NULL,
+  question_id INT UNSIGNED NOT NULL,
+  selected_option CHAR(1) NULL,
+  is_correct TINYINT(1) NULL,
+  marked_flag TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_attempt_questions_attempt FOREIGN KEY (attempt_id)
+    REFERENCES attempts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_attempt_questions_question FOREIGN KEY (question_id)
+    REFERENCES questions(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
