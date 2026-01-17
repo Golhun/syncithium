@@ -20,59 +20,7 @@ $publicRoot = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public';
  * Usage:
  *   <?= heroicon('academic-cap', 'outline', 'w-5 h-5 text-sky-400') ?>
  */
-function heroicon(string $name, string $variant = 'outline', string $class = 'w-5 h-5'): string
-{
-    $variant = strtolower($variant) === 'solid' ? 'solid' : 'outline';
 
-    // Candidate paths for different Heroicons layouts
-    // Adjust/add candidates if your folder differs.
-    $candidates = [
-        // v2 common
-        "/assets/icons/heroicons/24/{$variant}/{$name}.svg",
-        "/assets/icons/heroicons/20/{$variant}/{$name}.svg",
-        // simplified custom
-        "/assets/icons/heroicons/{$variant}/{$name}.svg",
-        // if you kept original v1 style names
-        "/assets/icons/heroicons/{$variant}/{$name}.svg",
-    ];
-
-    $publicRoot = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public';
-
-    $svg = null;
-    foreach ($candidates as $rel) {
-        $abs = $publicRoot . str_replace('/', DIRECTORY_SEPARATOR, $rel);
-        if (is_file($abs)) {
-            $svg = file_get_contents($abs);
-            break;
-        }
-    }
-
-    if (!$svg) {
-        // Fail quietly (avoid breaking page rendering)
-        return '';
-    }
-
-    // Inject class into the first <svg ...> tag
-    $svg = preg_replace(
-        '/<svg\b(?![^>]*\bclass=)([^>]*)>/i',
-        '<svg$1 class="' . htmlspecialchars($class, ENT_QUOTES) . '" aria-hidden="true">',
-        $svg,
-        1
-    );
-
-    // If SVG already has class, append our classes
-    if (!str_contains($svg, 'aria-hidden=')) {
-        $svg = preg_replace('/<svg\b([^>]*)>/i', '<svg$1 aria-hidden="true">', $svg, 1);
-    }
-    $svg = preg_replace(
-        '/class="([^"]*)"/i',
-        'class="$1 ' . htmlspecialchars($class, ENT_QUOTES) . '"',
-        $svg,
-        1
-    );
-
-    return $svg;
-}
 
 ?>
 <!doctype html>
