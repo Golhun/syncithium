@@ -1,56 +1,155 @@
 <?php
+declare(strict_types=1);
+
 /** @var array $config */
 /** @var string $title */
 /** @var string $content */
+
 $user = current_user();
-$base = rtrim(base_url(), '/');
 $appName = (string)(app_config('app.name', 'Syncithium'));
+
+$base = rtrim(base_url(), '/');
+
+// Absolute path to /public for loading local SVG icons
+$publicRoot = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public';
+
+/**
+ * Inline a Heroicon SVG from local folders.
+ *
+ * Supports several common Heroicons folder layouts.
+ * Usage:
+ *   <?= heroicon('academic-cap', 'outline', 'w-5 h-5 text-sky-400') ?>
+ */
+function heroicon(string $name, string $variant = 'outline', string $class = 'w-5 h-5'): string
+{
+    $variant = strtolower($variant) === 'solid' ? 'solid' : 'outline';
+
+    // Candidate paths for different Heroicons layouts
+    // Adjust/add candidates if your folder differs.
+    $candidates = [
+        // v2 common
+        "/assets/icons/heroicons/24/{$variant}/{$name}.svg",
+        "/assets/icons/heroicons/20/{$variant}/{$name}.svg",
+        // simplified custom
+        "/assets/icons/heroicons/{$variant}/{$name}.svg",
+        // if you kept original v1 style names
+        "/assets/icons/heroicons/{$variant}/{$name}.svg",
+    ];
+
+    $publicRoot = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public';
+
+    $svg = null;
+    foreach ($candidates as $rel) {
+        $abs = $publicRoot . str_replace('/', DIRECTORY_SEPARATOR, $rel);
+        if (is_file($abs)) {
+            $svg = file_get_contents($abs);
+            break;
+        }
+    }
+
+    if (!$svg) {
+        // Fail quietly (avoid breaking page rendering)
+        return '';
+    }
+
+    // Inject class into the first <svg ...> tag
+    $svg = preg_replace(
+        '/<svg\b(?![^>]*\bclass=)([^>]*)>/i',
+        '<svg$1 class="' . htmlspecialchars($class, ENT_QUOTES) . '" aria-hidden="true">',
+        $svg,
+        1
+    );
+
+    // If SVG already has class, append our classes
+    if (!str_contains($svg, 'aria-hidden=')) {
+        $svg = preg_replace('/<svg\b([^>]*)>/i', '<svg$1 aria-hidden="true">', $svg, 1);
+    }
+    $svg = preg_replace(
+        '/class="([^"]*)"/i',
+        'class="$1 ' . htmlspecialchars($class, ENT_QUOTES) . '"',
+        $svg,
+        1
+    );
+
+    return $svg;
+}
 
 ?>
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= e($title) ?> | <?= e($appName) ?></title>
 
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background: #0b1220; color: #e5e7eb; }
-    a { color: #38bdf8; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .container { max-width: 960px; margin: 0 auto; padding: 24px; }
-    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; }
-    .grid { display: grid; gap: 16px; }
-    .grid-2 { grid-template-columns: 1fr; }
-    @media (min-width: 860px){ .grid-2 { grid-template-columns: 1fr 1fr; } }
-    .btn { display: inline-block; padding: 10px 14px; border-radius: 10px; border: 1px solid #1f2937; background: #0b3a60; color: #fff; cursor: pointer; }
-    .btn:hover { filter: brightness(1.08); }
-    .btn-secondary { background: #0b1f36; }
-    .btn-danger { background: #7f1d1d; }
-    input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; }
-    label { display: block; margin-bottom: 6px; color: #cbd5e1; }
-    .row { display: flex; gap: 12px; }
-    .row > div { flex: 1; }
-    .muted { color: #94a3b8; }
-    .flash { border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid #1f2937; }
-    .flash-success { background: rgba(34,197,94,0.12); }
-    .flash-error { background: rgba(239,68,68,0.12); }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { padding: 10px 8px; border-bottom: 1px solid #1f2937; text-align: left; vertical-align: top; }
-    .badge { display: inline-block; padding: 3px 8px; border: 1px solid #1f2937; border-radius: 999px; font-size: 12px; }
-  </style>
-</head>
-<body>
-  <?php require __DIR__ . '/partials/nav.php'; ?>
-  <div class="container">
-    <?php if ($msg = flash_get('success')): ?>
-      <div class="flash flash-success"><?= e($msg) ?></div>
-    <?php endif; ?>
-    <?php if ($msg = flash_get('error')): ?>
-      <div class="flash flash-error"><?= e($msg) ?></div>
-    <?php endif; ?>
+  <!-- Tailwind output (local). Ensure this file exists. -->
+  <link rel="stylesheet" href="<?= e($base) ?>/assets/css/app.css">
 
-    <?= $content ?>
+  <!-- Alpine (local) -->
+  <script defer src="<?= e($base) ?>/assets/js/alpine.min.js"></script>
+
+  <!-- Small progressive enhancement, avoid FOUC for Alpine -->
+  <style>[x-cloak]{display:none!important}</style>
+</head>
+
+<body class="h-full bg-slate-950 text-slate-100">
+  <div class="min-h-full">
+
+    <?php require __DIR__ . '/partials/nav.php'; ?>
+
+    <main class="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8 py-6">
+      <?php if ($msg = flash_get('success')): ?>
+        <div
+          class="mb-4 rounded-xl border border-emerald-700/30 bg-emerald-500/10 px-4 py-3 text-emerald-200
+                 transition duration-200 ease-out"
+          role="status"
+        >
+          <div class="flex items-start gap-3">
+            <div class="mt-0.5">
+              <?= heroicon('check-circle', 'solid', 'w-5 h-5 text-emerald-300') ?>
+            </div>
+            <div class="leading-6">
+              <?= e($msg) ?>
+            </div>
+          </div>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($msg = flash_get('error')): ?>
+        <div
+          class="mb-4 rounded-xl border border-rose-700/30 bg-rose-500/10 px-4 py-3 text-rose-200
+                 transition duration-200 ease-out"
+          role="alert"
+        >
+          <div class="flex items-start gap-3">
+            <div class="mt-0.5">
+              <?= heroicon('exclamation-triangle', 'solid', 'w-5 h-5 text-rose-300') ?>
+            </div>
+            <div class="leading-6">
+              <?= e($msg) ?>
+            </div>
+          </div>
+        </div>
+      <?php endif; ?>
+
+      <!-- Page content -->
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-6 shadow-sm">
+        <?= $content ?>
+      </section>
+
+      <footer class="mt-8 text-xs text-slate-400">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <span class="font-medium text-slate-300"><?= e($appName) ?></span>
+            <span class="text-slate-500">, quiz practice and review</span>
+          </div>
+          <div class="text-slate-500">
+            <?= $user ? ('Signed in as ' . e((string)($user['email'] ?? ''))) : 'Not signed in' ?>
+          </div>
+        </div>
+      </footer>
+    </main>
+
   </div>
 </body>
 </html>

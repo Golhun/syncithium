@@ -181,3 +181,98 @@ function flash_get(string $key): ?string
 
     return $msg;
 }
+
+
+/**
+ * Heroicons (local SVG) loader
+ *
+ * Expected folders:
+ *  - public/assets/icons/heroicons/outline/<name>.svg
+ *  - public/assets/icons/heroicons/solid/<name>.svg
+ *
+ * Usage:
+ *   echo heroicon('outline', 'home', 'h-5 w-5 text-slate-400');
+ *   echo heroicon_swap('home', 'h-5 w-5', 'text-slate-400', 'text-white');
+ */
+
+function heroicon(string $style, string $name, string $class = '', array $attrs = []): string
+{
+    static $cache = [];
+
+    $style = strtolower(trim($style));
+    $style = in_array($style, ['outline', 'solid'], true) ? $style : 'outline';
+
+    $name = trim($name);
+    if ($name === '') return '';
+
+    // Compute absolute file path
+    $root = dirname(__DIR__); // src -> project root
+    $file = $root . '/public/assets/icons/heroicons/' . $style . '/' . $name . '.svg';
+
+    $key = $style . ':' . $name . ':' . $class . ':' . md5(json_encode($attrs));
+    if (isset($cache[$key])) return $cache[$key];
+
+    if (!is_file($file)) {
+        // Fail soft. Avoid throwing in UI rendering.
+        return $cache[$key] = '';
+    }
+
+    $svg = (string)file_get_contents($file);
+    if ($svg === '') return $cache[$key] = '';
+
+    // Inject/merge class
+    if ($class !== '') {
+        if (preg_match('/\sclass="([^"]*)"/', $svg, $m)) {
+            $existing = trim($m[1]);
+            $merged = trim($existing . ' ' . $class);
+            $svg = preg_replace('/\sclass="[^"]*"/', ' class="' . e($merged) . '"', $svg, 1);
+        } else {
+            $svg = preg_replace('/<svg\b/', '<svg class="' . e($class) . '"', $svg, 1);
+        }
+    }
+
+    // Inject extra attributes (aria, role, etc.)
+    foreach ($attrs as $k => $v) {
+        $k = trim((string)$k);
+        if ($k === '') continue;
+
+        $v = (string)$v;
+
+        // If attr exists already, replace first occurrence
+        if (preg_match('/\s' . preg_quote($k, '/') . '="[^"]*"/', $svg)) {
+            $svg = preg_replace(
+                '/\s' . preg_quote($k, '/') . '="[^"]*"/',
+                ' ' . $k . '="' . e($v) . '"',
+                $svg,
+                1
+            );
+        } else {
+            $svg = preg_replace('/<svg\b/', '<svg ' . $k . '="' . e($v) . '"', $svg, 1);
+        }
+    }
+
+    return $cache[$key] = $svg;
+}
+
+/**
+ * Outline by default, Solid on hover.
+ * Works best when the parent has class "group".
+ */
+function heroicon_swap(
+    string $name,
+    string $sizeClass = 'h-5 w-5',
+    string $baseColorClass = 'text-slate-400',
+    string $hoverColorClass = 'text-white'
+): string {
+    $outline = heroicon('outline', $name, $sizeClass . ' ' . $baseColorClass . ' group-hover:hidden', [
+        'aria-hidden' => 'true',
+        'focusable' => 'false',
+    ]);
+
+    $solid = heroicon('solid', $name, $sizeClass . ' ' . $hoverColorClass . ' hidden group-hover:inline-block', [
+        'aria-hidden' => 'true',
+        'focusable' => 'false',
+    ]);
+
+    return $outline . $solid;
+}
