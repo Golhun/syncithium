@@ -33,5 +33,7 @@ $load('admin_users.php');
 $load('taxonomy_admin.php');
 $load('taxonomy_user.php');
 $load('api_taxonomy.php');
+$load('questions_admin.php');
+$load('questions_user.php');
 
 return $routes;
