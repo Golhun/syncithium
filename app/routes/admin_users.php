@@ -251,24 +251,155 @@ return [
   // Admin: one-time credential reveal
   // =========================
   'admin_credential_reveal' => function (PDO $db, array $config): void {
-    $admin = require_admin($db);
+      $admin = require_admin($db);
+      $reveal = reveal_take();
 
-    $reveal = reveal_take();
-
-    render('admin/credential_reveal', [
-      'title'  => 'One-time Credentials',
-      'reveal' => $reveal,
-    ]);
+      render('admin/credential_reveal', [
+          'title'  => 'One-time Credentials',
+          'reveal' => $reveal,
+      ]);
   },
 
   // Optional: download endpoint (currently disabled)
   'admin_credential_reveal_download' => function (PDO $db, array $config): void {
-    $admin = require_admin($db);
-    if (!is_post()) redirect('/public/index.php?r=admin_users');
-    csrf_verify();
+      $admin = require_admin($db);
+      if (!is_post()) redirect('/public/index.php?r=admin_users');
+      csrf_verify();
 
-    flash_set('error', 'Download not enabled. Copy from the reveal screen.');
-    redirect('/public/index.php?r=admin_users');
+      flash_set('error', 'Download not enabled. Copy from the reveal screen.');
+      redirect('/public/index.php?r=admin_users');
+  },
+
+    // =========================
+  // Admin: password reset requests list
+  // =========================
+  'admin_reset_requests' => function (PDO $db, array $config): void {
+      $admin = require_admin($db);
+
+      $stmt = $db->prepare("
+        SELECT r.*, u.email AS user_email
+        FROM password_reset_requests r
+        LEFT JOIN users u ON u.id = r.user_id
+        WHERE r.status = 'open'
+        ORDER BY r.created_at DESC
+      ");
+      $stmt->execute();
+      $requests = $stmt->fetchAll() ?: [];
+
+      render('admin/reset_requests', [
+          'title'    => 'Password Reset Requests',
+          'requests' => $requests,
+      ]);
+  },
+
+  // =========================
+  // Admin: password reset request actions
+  // =========================
+  'admin_reset_requests_action' => function (PDO $db, array $config): void {
+      $admin = require_admin($db);
+      if (!is_post()) {
+          redirect('/public/index.php?r=admin_reset_requests');
+      }
+      csrf_verify();
+
+      $action    = (string)($_POST['action'] ?? '');
+      $requestId = (int)($_POST['request_id'] ?? 0);
+
+      $stmt = $db->prepare("SELECT * FROM password_reset_requests WHERE id = :id LIMIT 1");
+      $stmt->execute([':id' => $requestId]);
+      $req = $stmt->fetch();
+
+      if (!$req || ($req['status'] ?? '') !== 'open') {
+          flash_set('error', 'Request not found or already processed.');
+          redirect('/public/index.php?r=admin_reset_requests');
+      }
+
+      if ($action === 'reject') {
+          $stmt = $db->prepare("
+            UPDATE password_reset_requests
+            SET status = 'rejected', processed_at = NOW(), processed_by = :aid
+            WHERE id = :id
+          ");
+          $stmt->execute([
+              ':aid' => (int)$admin['id'],
+              ':id'  => $requestId,
+          ]);
+
+          audit_log_event($db, (int)$admin['id'], 'PASSWORD_RESET_REQUEST_REJECT', 'password_reset_requests', $requestId);
+          flash_set('success', 'Request rejected.');
+          redirect('/public/index.php?r=admin_reset_requests');
+      }
+
+      if ($action === 'generate_token') {
+          if (empty($req['user_id'])) {
+              // Email did not map to a user; mark invalid to avoid orphaned tokens
+              $stmt = $db->prepare("
+                UPDATE password_reset_requests
+                SET status = 'invalid', processed_at = NOW(), processed_by = :aid
+                WHERE id = :id
+              ");
+              $stmt->execute([
+                  ':aid' => (int)$admin['id'],
+                  ':id'  => $requestId,
+              ]);
+
+              audit_log_event($db, (int)$admin['id'], 'PASSWORD_RESET_REQUEST_INVALID', 'password_reset_requests', $requestId);
+              flash_set('error', 'Request email does not match an existing account.');
+              redirect('/public/index.php?r=admin_reset_requests');
+          }
+
+          $userId = (int)$req['user_id'];
+
+          // Generate secure token, store hash only
+          $token = bin2hex(random_bytes(16)); // 32-char hex
+          // Keep consistent with password_reset verifier
+          if (function_exists('reset_token_hash')) {
+              $tokenHash = reset_token_hash($token, $config);
+          } else {
+              $tokenHash = hash('sha256', $token);
+          }
+
+          $stmt = $db->prepare("
+            INSERT INTO password_resets (user_id, token_hash, expires_at, created_at)
+            VALUES (:uid, :th, DATE_ADD(NOW(), INTERVAL 30 MINUTE), NOW())
+          ");
+          $stmt->execute([
+              ':uid' => $userId,
+              ':th'  => $tokenHash,
+          ]);
+
+          $stmt = $db->prepare("
+            UPDATE password_reset_requests
+            SET status = 'processed', processed_at = NOW(), processed_by = :aid
+            WHERE id = :id
+          ");
+          $stmt->execute([
+              ':aid' => (int)$admin['id'],
+              ':id'  => $requestId,
+          ]);
+
+          audit_log_event(
+              $db,
+              (int)$admin['id'],
+              'PASSWORD_RESET_TOKEN_GENERATE',
+              'users',
+              $userId,
+              ['request_id' => $requestId]
+          );
+
+          // Show token on one-time reveal screen
+          reveal_set([
+              'label'        => 'Password reset token (share securely)',
+              'secret_label' => 'Reset token',
+              'secret'       => $token,
+              'meta'         => ['user_id' => $userId, 'request_id' => $requestId],
+          ]);
+
+          redirect('/public/index.php?r=admin_credential_reveal');
+      }
+
+      flash_set('error', 'Unknown action.');
+      redirect('/public/index.php?r=admin_reset_requests');
   },
 
 ];

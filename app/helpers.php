@@ -62,14 +62,32 @@ function reset_token_hash(string $token, array $config): string {
   return hash_hmac('sha256', $token, $pepper);
 }
 
-function render(string $view, array $data = []): void {
-    extract($data, EXTR_SKIP);
+function render(string $view, array $data = []): void
+{
+    // Expose these globals inside the function so layout.php can use them
+    global $db, $config;
+
+    // Make $data keys available as local variables in views/layout
+    extract($data);
 
     $view_file = __DIR__ . '/views/' . $view . '.php';
     if (!is_file($view_file)) {
-      http_response_code(500);
-      exit('View not found: ' . htmlspecialchars($view));
+        http_response_code(500);
+        echo 'View not found: ' . htmlspecialchars($view);
+        return;
     }
 
+    // Layout will use $view_file, $db, $config, etc.
     require __DIR__ . '/views/layout.php';
-  }
+}
+
+function flash_take(): ?array {
+    if (empty($_SESSION['flash'])) {
+        return null;
+    }
+
+    $data = $_SESSION['flash'];
+    unset($_SESSION['flash']);
+    return $data;
+}
+

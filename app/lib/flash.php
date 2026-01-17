@@ -1,43 +1,6 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Flash message + one-time secret helpers.
- * Backed by $_SESSION.
- */
-
-if (!function_exists('flash_set')) {
-    function flash_set(string $type, string $message): void
-    {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
-
-        $_SESSION['flash'] = [
-            'type'    => $type,
-            'message' => $message,
-            'time'    => time(),
-        ];
-    }
-}
-
-if (!function_exists('flash_take')) {
-    function flash_take(): ?array
-    {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
-
-        if (empty($_SESSION['flash']) || !is_array($_SESSION['flash'])) {
-            return null;
-        }
-
-        $data = $_SESSION['flash'];
-        unset($_SESSION['flash']);
-
-        return $data;
-    }
-}
 
 /**
  * One-time reveal helper for temp passwords / reset tokens.
