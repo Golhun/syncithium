@@ -3,14 +3,17 @@
 /** @var string $title */
 /** @var string $content */
 $user = current_user();
-$base = base_url($config);
+$base = rtrim(base_url(), '/');
+$appName = (string)(app_config('app.name', 'Syncithium'));
+
 ?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?= e($title) ?> | <?= e($config['app']['name'] ?? 'Syncithium') ?></title>
+  <title><?= e($title) ?> | <?= e($appName) ?></title>
+
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background: #0b1220; color: #e5e7eb; }
     a { color: #38bdf8; text-decoration: none; }
