@@ -16,6 +16,11 @@ $allowed = [
     'admin_generate_reset',
     'admin_reset_password',
     'admin_toggle_user',
+    'admin_users_bulk',
+    'admin_user_reset',
+    'admin_user_toggle',
+    'reset_password',
+
 
     // existing quiz routes...
     'admin_import',
