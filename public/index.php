@@ -24,14 +24,16 @@ switch ($route) {
       $email = (string)($_POST['email'] ?? '');
       $password = (string)($_POST['password'] ?? '');
 
-      if (attempt_login($db, $email, $password)) {
+      // UPDATED: pass $config for lockout policy
+      if (attempt_login($db, $email, $password, $config)) {
         $u = current_user($db);
         if ($u && (int)$u['must_change_password'] === 1) {
           redirect('/public/index.php?r=force_password_change');
         }
         redirect('/public/index.php?r=admin_users');
       } else {
-        flash_set('error', 'Invalid credentials.');
+        // Avoid leaking whether account exists/locked/disabled
+        flash_set('error', 'Sign-in failed. Please try again.');
       }
     }
     render('auth/login', ['title' => 'Sign in']);
@@ -67,6 +69,11 @@ switch ($route) {
         $stmt = $db->prepare("UPDATE users SET password_hash = :h, must_change_password = 0 WHERE id = :id");
         $stmt->execute([':h' => $hash, ':id' => (int)$u['id']]);
 
+        // AUDIT: user completed forced password change (self)
+        audit_log_event($db, (int)$u['id'], 'USER_PASSWORD_CHANGE', 'users', (int)$u['id'], [
+          'flow' => 'forced_first_login'
+        ]);
+
         flash_set('success', 'Password updated. Welcome.');
         redirect('/public/index.php?r=admin_users');
       }
@@ -100,10 +107,18 @@ switch ($route) {
       if ($action === 'disable') {
         $stmt = $db->prepare("UPDATE users SET disabled_at = NOW() WHERE id = :id");
         $stmt->execute([':id' => $userId]);
+
+        // AUDIT
+        audit_log_event($db, (int)$admin['id'], 'USER_DISABLE', 'users', $userId);
+
         flash_set('success', 'User disabled.');
       } elseif ($action === 'enable') {
         $stmt = $db->prepare("UPDATE users SET disabled_at = NULL WHERE id = :id");
         $stmt->execute([':id' => $userId]);
+
+        // AUDIT
+        audit_log_event($db, (int)$admin['id'], 'USER_ENABLE', 'users', $userId);
+
         flash_set('success', 'User enabled.');
       } elseif ($action === 'reset_password') {
         $temp = random_password(14);
@@ -113,6 +128,11 @@ switch ($route) {
                               SET password_hash = :h, must_change_password = 1
                               WHERE id = :id");
         $stmt->execute([':h' => $hash, ':id' => $userId]);
+
+        // AUDIT (never log temp password)
+        audit_log_event($db, (int)$admin['id'], 'USER_PASSWORD_RESET', 'users', $userId, [
+          'must_change_password' => 1
+        ]);
 
         // Store one-time temp password in flash (shown once)
         flash_set('success', "Temp password: {$temp} (share securely, user must change on login)");
@@ -170,6 +190,15 @@ switch ($route) {
           $stmt = $db->prepare("INSERT INTO users (email, password_hash, role, must_change_password)
                                 VALUES (:email, :hash, :role, 1)");
           $stmt->execute([':email' => $email, ':hash' => $hash, ':role' => $role]);
+
+          $newId = (int)$db->lastInsertId();
+
+          // AUDIT
+          audit_log_event($db, (int)$admin['id'], 'USER_CREATE', 'users', $newId, [
+            'email' => $email,
+            'role' => $role,
+            'source' => 'single'
+          ]);
 
           $created = ['email' => $email, 'role' => $role, 'temp' => $temp];
           flash_set('success', 'User created. Temp password displayed below once.');
@@ -237,6 +266,16 @@ switch ($route) {
           $stmt = $db->prepare("INSERT INTO users (email, password_hash, role, must_change_password)
                                 VALUES (:email, :hash, :role, 1)");
           $stmt->execute([':email' => $email, ':hash' => $hash, ':role' => $role]);
+
+          $newId = (int)$db->lastInsertId();
+
+          // AUDIT
+          audit_log_event($db, (int)$admin['id'], 'USER_CREATE', 'users', $newId, [
+            'email' => $email,
+            'role' => $role,
+            'source' => 'bulk'
+          ]);
+
           $results[] = ['email' => $email, 'status' => 'created', 'temp' => $temp];
         } catch (PDOException $e) {
           $results[] = ['email' => $email, 'status' => 'exists', 'temp' => ''];

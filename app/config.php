@@ -18,5 +18,9 @@ return [
   ],
   'security' => [
     'password_min_len' => 10,
+      // Phase 1.1: basic lockout controls
+    'login_max_attempts' => 5,        // lockout threshold
+    'login_window_minutes' => 15,     // observation window
+    'login_lock_minutes' => 15,       // lockout duration
   ],
 ];

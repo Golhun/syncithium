@@ -56,26 +56,41 @@ function require_admin(PDO $db): array {
   return $u;
 }
 
-function attempt_login(PDO $db, string $email, string $password): bool {
-  $stmt = $db->prepare("SELECT id, email, password_hash, role, must_change_password, disabled_at
-                        FROM users WHERE email = :email LIMIT 1");
-  $stmt->execute([':email' => strtolower(trim($email))]);
+
+function attempt_login(PDO $db, string $email, string $password, array $config): bool {
+  $email = strtolower(trim($email));
+
+  $stmt = $db->prepare("
+    SELECT id, email, password_hash, role, must_change_password, disabled_at,
+           failed_attempts, last_failed_at, lockout_until
+    FROM users
+    WHERE email = :email
+    LIMIT 1
+  ");
+  $stmt->execute([':email' => $email]);
   $u = $stmt->fetch();
   if (!$u) return false;
 
-  if (!empty($u['disabled_at'])) {
-    // Treat disabled as invalid login, do not leak info
+  // Do not leak disabled or lockout details to the UI
+  if (!empty($u['disabled_at'])) return false;
+
+  if (is_locked_out($u)) return false;
+
+  if (!password_verify($password, (string)$u['password_hash'])) {
+    register_failed_login(
+      $db,
+      (int)$u['id'],
+      $u['last_failed_at'] ? (string)$u['last_failed_at'] : null,
+      (int)($u['failed_attempts'] ?? 0),
+      $config
+    );
     return false;
   }
 
-  // Verify password using PHP password API :contentReference[oaicite:5]{index=5}
-  if (!password_verify($password, $u['password_hash'])) {
-    return false;
-  }
+  // Successful login: reset lockout counters
+  clear_failed_login_state($db, (int)$u['id']);
 
-  // Prevent session fixation by regenerating session ID after login :contentReference[oaicite:6]{index=6}
   session_regenerate_id(true);
-
   $_SESSION['uid'] = (int)$u['id'];
 
   return true;
@@ -86,4 +101,59 @@ function logout(): void {
   if (session_status() === PHP_SESSION_ACTIVE) {
     session_destroy();
   }
+}
+
+
+function is_locked_out(array $u): bool {
+  if (empty($u['lockout_until'])) return false;
+  $until = strtotime((string)$u['lockout_until']);
+  return $until !== false && $until > time();
+}
+
+function register_failed_login(PDO $db, int $userId, ?string $lastFailedAt, int $failedAttempts, array $config): void {
+  $maxAttempts = (int)($config['security']['login_max_attempts'] ?? 5);
+  $windowMin = (int)($config['security']['login_window_minutes'] ?? 15);
+  $lockMin = (int)($config['security']['login_lock_minutes'] ?? 15);
+
+  $now = time();
+  $lastTs = $lastFailedAt ? strtotime($lastFailedAt) : false;
+
+  // Reset window if last failure was long ago or invalid
+  if ($lastTs === false || ($now - $lastTs) > ($windowMin * 60)) {
+    $failedAttempts = 0;
+  }
+
+  $failedAttempts++;
+
+  $lockoutUntil = null;
+  $newFailedAttempts = $failedAttempts;
+
+  if ($failedAttempts >= $maxAttempts) {
+    $lockoutUntil = date('Y-m-d H:i:s', $now + ($lockMin * 60));
+    $newFailedAttempts = 0; // reset after lock to avoid permanent growth
+  }
+
+  $stmt = $db->prepare("
+    UPDATE users
+    SET failed_attempts = :fa,
+        last_failed_at = NOW(),
+        lockout_until = :lu
+    WHERE id = :id
+  ");
+  $stmt->execute([
+    ':fa' => $newFailedAttempts,
+    ':lu' => $lockoutUntil,
+    ':id' => $userId,
+  ]);
+}
+
+function clear_failed_login_state(PDO $db, int $userId): void {
+  $stmt = $db->prepare("
+    UPDATE users
+    SET failed_attempts = 0,
+        last_failed_at = NULL,
+        lockout_until = NULL
+    WHERE id = :id
+  ");
+  $stmt->execute([':id' => $userId]);
 }
