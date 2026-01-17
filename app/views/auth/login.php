@@ -23,10 +23,10 @@
       Sign in
     </button>
 
-    <p class="text-sm text-slate-600 mt-4">
-  Have a reset token?
-  <a class="underline" href="/public/index.php?r=password_reset">Reset your password</a>
-</p>
+  <div class="text-sm mt-4">
+  <a class="underline text-slate-700" href="/public/index.php?r=forgot_password">Forgot password?</a>
+</div>
+
 
 
     <p class="text-xs text-slate-500 mt-3">
