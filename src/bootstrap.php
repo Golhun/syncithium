@@ -13,6 +13,7 @@ if (!isset($config) || !is_array($config)) {
     throw new RuntimeException('config.php must return an array or define $config as an array.');
 }
 
+$GLOBALS['config'] = $config;
 date_default_timezone_set(($config['app']['timezone'] ?? 'Africa/Accra'));
 
 // 2) Load DB helper
