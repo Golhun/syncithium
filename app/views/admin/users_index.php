@@ -3,13 +3,32 @@
     <h1 class="text-2xl font-semibold">User Management</h1>
     <p class="text-sm text-slate-600">Create users, disable or enable accounts, and reset passwords.</p>
   </div>
-  <div class="flex gap-2">
+
+  <div class="flex flex-wrap gap-2 justify-end">
     <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_users_create">Create user</a>
+       href="/public/index.php?r=admin_levels">
+      Taxonomy
+    </a>
+
     <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
-       href="/public/index.php?r=admin_users_bulk">Bulk upload</a>
+       href="/public/index.php?r=password_reset_request">
+      Reset tokens
+    </a>
+
+    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
+       href="/public/index.php?r=admin_users_create">
+      Create user
+    </a>
+
+    <a class="rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-100"
+       href="/public/index.php?r=admin_users_bulk">
+      Bulk upload
+    </a>
+
     <a class="rounded-lg bg-slate-900 text-white px-3 py-2 hover:opacity-95"
-       href="/public/index.php?r=logout">Sign out</a>
+       href="/public/index.php?r=logout">
+      Sign out
+    </a>
   </div>
 </div>
 
@@ -41,6 +60,7 @@
             <td class="p-3"><?= e($u['email']) ?></td>
             <td class="p-3"><?= e($u['role']) ?></td>
             <td class="p-3"><?= ((int)$u['must_change_password'] === 1) ? 'Yes' : 'No' ?></td>
+
             <td class="p-3">
               <?php if (!empty($u['disabled_at'])): ?>
                 <span class="inline-flex items-center gap-1 text-xs bg-slate-200 px-2 py-1 rounded-full">
@@ -52,7 +72,9 @@
                 </span>
               <?php endif; ?>
             </td>
+
             <td class="p-3"><?= e((string)$u['created_at']) ?></td>
+
             <td class="p-3">
               <div class="flex justify-end gap-2">
                 <form method="post" action="/public/index.php?r=admin_users">

@@ -51,6 +51,9 @@
 .resize {
   resize: both;
 }
+.flex-wrap {
+  flex-wrap: wrap;
+}
 .items-center {
   align-items: center;
 }
@@ -72,6 +75,10 @@
 .border {
   border-style: var(--tw-border-style);
   border-width: 1px;
+}
+.border-t {
+  border-top-style: var(--tw-border-style);
+  border-top-width: 1px;
 }
 .border-b {
   border-bottom-style: var(--tw-border-style);

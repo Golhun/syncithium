@@ -1,0 +1,51 @@
+USE syncithium;
+
+CREATE TABLE IF NOT EXISTS levels (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  code VARCHAR(40) NOT NULL,                 -- e.g., "200"
+  name VARCHAR(120) NULL,                    -- optional friendly label
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_levels_code (code)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS modules (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  level_id BIGINT UNSIGNED NOT NULL,
+  code VARCHAR(60) NOT NULL,                 -- e.g., "GEM 201"
+  name VARCHAR(160) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_modules_level_code (level_id, code),
+  KEY idx_modules_level (level_id),
+  CONSTRAINT fk_modules_level FOREIGN KEY (level_id) REFERENCES levels(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS subjects (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  module_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(180) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_subjects_module_name (module_id, name),
+  KEY idx_subjects_module (module_id),
+  CONSTRAINT fk_subjects_module FOREIGN KEY (module_id) REFERENCES modules(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS topics (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(200) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_topics_subject_name (subject_id, name),
+  KEY idx_topics_subject (subject_id),
+  CONSTRAINT fk_topics_subject FOREIGN KEY (subject_id) REFERENCES subjects(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
