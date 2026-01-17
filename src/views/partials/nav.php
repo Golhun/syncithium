@@ -1,38 +1,57 @@
 <?php
-/** @var array $config */
 $user = current_user();
 $base = rtrim(base_url(), '/');
-?>
-<div style="border-bottom:1px solid #1f2937;background:#0b1f36;">
-  <div class="container" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:14px;padding-bottom:14px;">
-    <div>
-      <strong><?= e($config['app']['name'] ?? 'Syncithium') ?></strong>
-      <span class="muted" style="margin-left:8px;">Practice questions, get sharper.</span>
-    </div>
 
-    <div style="display:flex;gap:10px;align-items:center;">
-      <a href="<?= e(url_for('home')) ?>">Home</a>
+$isAdmin = false;
+if ($user) {
+    $isAdmin = is_admin_user($user);
+}
+?>
+<nav class="border-b border-slate-800 bg-slate-950/60 backdrop-blur">
+  <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+    <a href="<?= e(url_for('home')) ?>" class="flex items-center gap-2 group">
+      <span class="inline-flex items-center justify-center rounded-lg bg-sky-500/10 border border-sky-400/20 p-2">
+        <?= heroicon_swap('sparkles', 'h-5 w-5', 'text-sky-300', 'text-sky-200') ?>
+      </span>
+      <span class="font-semibold text-slate-100 tracking-tight">
+        <?= e((string)app_config('app.name', 'Syncithium')) ?>
+      </span>
+    </a>
+
+    <div class="flex items-center gap-2">
+      <a class="group inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-900"
+         href="<?= e(url_for('home')) ?>">
+        <?= heroicon_swap('home', 'h-5 w-5', 'text-slate-400', 'text-white') ?>
+        <span>Home</span>
+      </a>
 
       <?php if ($user): ?>
-        <a href="<?= e(url_for('quiz_start')) ?>">Start Quiz</a>
-        <a href="<?= e(url_for('my_attempts')) ?>">My Attempts</a>
+        <a class="group inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-900"
+           href="<?= e(url_for('change_password')) ?>">
+          <?= heroicon_swap('key', 'h-5 w-5', 'text-slate-400', 'text-white') ?>
+          <span>Password</span>
+        </a>
 
-        <?php if (is_admin_user($user)): ?>
-          <a href="<?= e(url_for('admin_import')) ?>">Import Questions</a>
-          <a href="<?= e(url_for('admin_users')) ?>">Users</a>
+        <?php if ($isAdmin): ?>
+          <a class="group inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-900"
+             href="<?= e(url_for('admin_users')) ?>">
+            <?= heroicon_swap('users', 'h-5 w-5', 'text-slate-400', 'text-white') ?>
+            <span>Admin</span>
+          </a>
         <?php endif; ?>
 
-        <a href="<?= e(url_for('change_password')) ?>">Change Password</a>
-
-        <span class="badge">
-          <?= e((string)($user['email'] ?? '')) ?>
-          <?= is_admin_user($user) ? ' (Admin)' : '' ?>
-        </span>
-
-        <a href="<?= e(url_for('logout')) ?>">Sign out</a>
+        <a class="group inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-900"
+           href="<?= e(url_for('logout')) ?>">
+          <?= heroicon_swap('arrow-right-on-rectangle', 'h-5 w-5', 'text-slate-400', 'text-white') ?>
+          <span>Logout</span>
+        </a>
       <?php else: ?>
-        <a href="<?= e(url_for('login')) ?>">Sign in</a>
+        <a class="group inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-900"
+           href="<?= e(url_for('login')) ?>">
+          <?= heroicon_swap('arrow-left-on-rectangle', 'h-5 w-5', 'text-slate-400', 'text-white') ?>
+          <span>Login</span>
+        </a>
       <?php endif; ?>
     </div>
   </div>
-</div>
+</nav>
