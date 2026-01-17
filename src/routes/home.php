@@ -1,7 +1,7 @@
 <?php
 $title = 'Home';
 
-$base = base_url($config);
+$base = rtrim(base_url(), '/');
 $user = current_user();
 
 ob_start();
@@ -12,7 +12,10 @@ ob_start();
   <?php if (!$user): ?>
     <div class="card">
       <p><strong>Start here</strong></p>
-      <p><a class="btn" href="<?= e($base) ?>/index.php?r=register">Create an account</a> <a class="btn secondary" href="<?= e($base) ?>/index.php?r=login">Sign in</a></p>
+      <p>
+        <a class="btn" href="<?= e($base) ?>/index.php?r=register">Create an account</a>
+        <a class="btn secondary" href="<?= e($base) ?>/index.php?r=login">Sign in</a>
+      </p>
       <p class="muted">Note: The first registered user becomes an Admin and can import questions.</p>
     </div>
   <?php else: ?>

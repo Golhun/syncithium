@@ -1,46 +1,72 @@
 <?php
+declare(strict_types=1);
 
-function current_user(): ?array {
-    return $_SESSION['user'] ?? null;
-}
-
-function require_auth(array $config): void {
-    if (!current_user()) {
-        flash_set('error', 'Please sign in to continue.');
-        redirect(base_url($config) . '/index.php?r=login');
+/**
+ * Return the currently logged-in user as an associative array, or null.
+ * Uses session user_id and fetches from DB for fresh state (e.g., is_admin changes).
+ */
+function current_user(): ?array
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
     }
+
+    $userId = $_SESSION['user_id'] ?? null;
+    if (!$userId) {
+        return null;
+    }
+
+    $stmt = db()->prepare('SELECT id, name, email, is_admin, created_at FROM users WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => (int)$userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $user ?: null;
 }
 
-function require_admin(array $config): void {
-    require_auth($config);
-    $user = current_user();
-    if (empty($user['is_admin'])) {
-        http_response_code(403);
-        echo 'Admin access required';
+/**
+ * Log a user in by storing their id in the session.
+ */
+function login_user(int $userId): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    $_SESSION['user_id'] = $userId;
+}
+
+/**
+ * Log out the current user.
+ */
+function logout_user(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    unset($_SESSION['user_id']);
+}
+
+/**
+ * Require login, otherwise redirect to login.
+ */
+function require_login(): void
+{
+    if (!current_user()) {
+        header('Location: ' . url_for('login'));
         exit;
     }
 }
 
-function auth_login(PDO $db, array $userRow): void {
-    // Store minimal safe session payload
-    $_SESSION['user'] = [
-        'id' => (int)$userRow['id'],
-        'name' => (string)$userRow['name'],
-        'email' => (string)$userRow['email'],
-        'is_admin' => (int)($userRow['is_admin'] ?? 0),
-    ];
-}
-
-function auth_logout(): void {
-    $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params['path'],
-            $params['domain'],
-            $params['secure'],
-            $params['httponly']
-        );
+/**
+ * Require admin, otherwise show 403.
+ */
+function require_admin(): void
+{
+    $u = current_user();
+    if (!$u || empty($u['is_admin'])) {
+        http_response_code(403);
+        echo '403 Forbidden';
+        exit;
     }
-    session_destroy();
 }
