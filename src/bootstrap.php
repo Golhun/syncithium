@@ -1,29 +1,29 @@
 <?php
+declare(strict_types=1);
 
-$config = require __DIR__ . '/../config.php';
+// Project root (…/syncithium)
+$root = dirname(__DIR__);
 
-date_default_timezone_set($config['app']['timezone'] ?? 'UTC');
-
-// Basic session hardening
-session_name('syncithium_session');
-session_set_cookie_params([
-    'httponly' => true,
-    'samesite' => 'Lax',
-    'secure' => false, // set true if using HTTPS
-]);
-
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
+// 1) Load config (supports either: return array OR $config = [...])
+$config_return = require $root . '/config.php';
+if (is_array($config_return)) {
+    $config = $config_return;
+}
+if (!isset($config) || !is_array($config)) {
+    throw new RuntimeException('config.php must return an array or define $config as an array.');
 }
 
-require_once __DIR__ . '/helpers.php';
+// 2) Load DB helper (this must define db_connect())
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/csrf.php';
 
-$db = db_connect($config['db']);
+// 3) Connect and expose PDO
+$db_cfg = $config['db'] ?? $config; // supports both config shapes
+$pdo = db_connect($db_cfg);
 
-// Ensure first registered user becomes admin
-// (Handled in registration route)
+// Optional: make PDO easy to access anywhere
+$GLOBALS['pdo'] = $pdo;
 
-return [$config, $db];
+function db(): PDO
+{
+    return $GLOBALS['pdo'];
+}
