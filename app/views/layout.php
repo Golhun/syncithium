@@ -63,6 +63,7 @@ $currentR = isset($_GET['r']) ? (string)$_GET['r'] : '';
     <link rel="stylesheet" href="/public/assets/css/alertify.min.css">
 
     <!-- Alpine (local) -->
+     <style>[x-cloak]{display:none !important;}</style>
     <script src="/public/assets/js/alpine.min.js" defer></script>
 </head>
 <body class="bg-gray-50 text-gray-900">

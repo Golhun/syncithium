@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+date_default_timezone_set('UTC'); // or 'Africa/Accra'
+
 $config = require __DIR__ . '/config.php';
 
 require_once __DIR__ . '/helpers.php';

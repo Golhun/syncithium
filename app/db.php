@@ -21,5 +21,7 @@ function db(array $config): PDO {
     PDO::ATTR_EMULATE_PREPARES => false,
   ]);
 
+  $pdo->exec("SET time_zone = '+00:00'");
+
   return $pdo;
 }

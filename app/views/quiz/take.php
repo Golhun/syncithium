@@ -69,7 +69,7 @@ declare(strict_types=1);
         </div>
 
         <div class="grid grid-cols-8 gap-1">
-          <template x-for="n in total" :key="'qnav-' + n">
+          <template x-for="n in navItems" :key="'qnav-' + n">
             <button
               type="button"
               class="h-8 w-8 text-xs rounded-lg border"
@@ -267,16 +267,16 @@ declare(strict_types=1);
 <script>
 function quizTakeScreen(cfg) {
   return {
-    attemptId: cfg.attemptId,
-    remaining: cfg.remainingSeconds,
-    total: cfg.total,
+    attemptId: Number(cfg.attemptId) || 0,
+    remaining: Number(cfg.remainingSeconds) || 0,
+    total: Number(cfg.total) || 0,
 
     // paging
     perPage: 5,
     page: 1,
 
-    // state maps
-    answeredNums: new Set(),
+    // state maps (use plain objects for Alpine-friendliness)
+    answeredByNum: {},         // { "1": true, "2": true, ... }
     markedByAq: {},
 
     // report modal
@@ -289,24 +289,24 @@ function quizTakeScreen(cfg) {
     pageLabel: '',
     totalPages: 1,
 
+    // SAFE iterable for x-for
+    navItems: [],
+
     init() {
-      // hydrate marked flags from hidden inputs that have default values
-      // simplest: markByAq built as user interacts, backend keeps truth
+      // Build an explicit iterable list for x-for
+      const t = Math.max(0, Number(this.total) || 0);
+      this.navItems = Array.from({ length: t }, (_, i) => i + 1);
 
       this.recalcPages();
       this.updateTimeLabel();
       this.startTimer();
 
-      // initial scan: find checked radios to mark answered
+      // Initial scan: mark already-checked answers as "answered"
       document.querySelectorAll('input[type="radio"]:checked').forEach((el) => {
         const name = String(el.name || '');
         // name like answers[123]
-        const m = name.match(/answers\[(\d+)\]/);
-        if (m) {
-          const aqId = Number(m[1]);
-          // locate question number by walking to container index:
-          // we already set answered on change, so initial can be ignored safely
-        }
+        // We do not reliably know the question number from DOM without extra mapping,
+        // so we skip mapping here. (Answered state will be set on @change.)
       });
     },
 
@@ -345,7 +345,6 @@ function quizTakeScreen(cfg) {
     jumpToNumber(n) {
       const pp = Number(this.perPage || 5);
       if (pp >= 9999) {
-        // scroll to nth visible card
         const cards = document.querySelectorAll('[x-show]');
         const el = cards[n - 1];
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -358,14 +357,13 @@ function quizTakeScreen(cfg) {
     },
 
     setAnswered(n, aqId) {
-      this.answeredNums.add(Number(n));
-      // optional: autosave light
+      this.answeredByNum[String(n)] = true;
       this.saveNow(true);
     },
 
     navClass(n) {
       const isCurrent = this.isVisible(n);
-      const isAnswered = this.answeredNums.has(Number(n));
+      const isAnswered = !!this.answeredByNum[String(n)];
       const isFlagged = this.isFlaggedNumber(n);
 
       if (isCurrent) return 'border-sky-300 bg-sky-50 text-sky-800';
@@ -375,7 +373,7 @@ function quizTakeScreen(cfg) {
     },
 
     navTitle(n) {
-      const isAnswered = this.answeredNums.has(Number(n));
+      const isAnswered = !!this.answeredByNum[String(n)];
       const isFlagged = this.isFlaggedNumber(n);
       if (isFlagged) return `Question ${n}: flagged`;
       if (isAnswered) return `Question ${n}: answered`;
@@ -394,15 +392,12 @@ function quizTakeScreen(cfg) {
     },
 
     isFlaggedNumber(n) {
-      // best-effort: flagged means any question on page whose aqId is marked,
-      // we do not map n->aqId here. This is a UI hint, not critical.
-      // If you want exact mapping, we can pass aqId list per question into JS.
+      // Still optional. If you want this exact, we can pass aqId per question number.
       return false;
     },
 
     // Timer
     startTimer() {
-      // if remaining already 0, force submit
       if (this.remaining <= 0) {
         this.submitFinal();
         return;
@@ -444,14 +439,19 @@ function quizTakeScreen(cfg) {
           headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
           body: fd
         });
+
+        // If your PHP route returns redirects/HTML, res.json() will throw.
+        // This guard prevents crashing Alpine.
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) return;
+
         const j = await res.json();
         if (!silent && j && j.ok) {
-          // Optional: toast if you want
-          // alertify.success('Saved');
+          // optional toast
         }
       } catch (e) {
         if (!silent) {
-          // alertify.error('Save failed');
+          // optional toast
         }
       }
     },
@@ -506,3 +506,4 @@ function quizTakeScreen(cfg) {
   }
 }
 </script>
+
