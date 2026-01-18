@@ -33,18 +33,6 @@ function random_password(int $length = 14): string {
   return substr($raw, 0, $length);
 }
 
-/**
- * Local Heroicons (SVG files) helper.
- * Put SVGs into /public/assets/icons/outline/<name>.svg
- */
-function icon(string $name, string $classes = 'w-5 h-5'): string {
-  $path = dirname(__DIR__) . "/public/assets/icons/outline/{$name}.svg";
-  if (!is_file($path)) return '';
-  $svg = file_get_contents($path) ?: '';
-  // Add class attribute to the opening <svg ...>
-  $svg = preg_replace('/<svg\b([^>]*)>/', '<svg$1 class="'.e($classes).'">', $svg, 1) ?? $svg;
-  return $svg;
-}
 
 
 function base64url_encode(string $bin): string {

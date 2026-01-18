@@ -39,24 +39,6 @@ $flashes = array_values(array_filter($flashes, static function ($m): bool {
 
 $currentR = isset($_GET['r']) ? (string)$_GET['r'] : '';
 
-// --- Heroicons helper (local SVG files) ---
-function hi_svg(string $name, string $variant = 'outline', string $class = 'h-5 w-5'): string
-{
-    $variant = ($variant === 'solid') ? 'solid' : 'outline';
-
-    $base = __DIR__ . '/../../public/assets/icons/heroicons/24/' . $variant . '/';
-    $path = $base . $name . '.svg';
-
-    if (!is_file($path)) return '';
-
-    $svg = file_get_contents($path);
-    if ($svg === false) return '';
-
-    // inject class + basic accessibility
-    $svg = preg_replace('/<svg\b([^>]*)>/', '<svg$1 class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '" aria-hidden="true" focusable="false">', $svg, 1);
-
-    return $svg ?: '';
-}
 
 // --- Nav item renderer ---
 function nav_item(string $href, string $label, string $iconName, bool $active = false): string

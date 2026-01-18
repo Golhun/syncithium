@@ -13,23 +13,26 @@ function hi_svg_view(string $name, string $variant = 'outline', string $class = 
 {
   $variant = ($variant === 'solid') ? 'solid' : 'outline';
 
-  // app/views/admin -> project root is 4 levels up
-  $root = dirname(__DIR__, 4);
-  $path = $root . '/public/assets/icons/heroicons/24/' . $variant . '/' . $name . '.svg';
+  // app/views/admin  -> go up 3 levels to project root -> /public/...
+  $base = __DIR__ . '/../../../public/assets/icons/heroicons/24/' . $variant . '/';
+  $path = $base . $name . '.svg';
 
   if (!is_file($path)) return '';
+
   $svg = file_get_contents($path);
   if ($svg === false) return '';
 
+  // inject class + accessibility
   $svg = preg_replace(
     '/<svg\b([^>]*)>/',
-    '<svg$1 class="' . e4($class) . '" aria-hidden="true" focusable="false">',
+    '<svg$1 class="' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '" aria-hidden="true" focusable="false">',
     $svg,
     1
   );
 
   return $svg ?: '';
 }
+
 
 function status_badge(string $status): string {
   $s = strtolower(trim($status));
