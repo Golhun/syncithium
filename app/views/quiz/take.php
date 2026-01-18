@@ -12,7 +12,7 @@ declare(strict_types=1);
     remainingSeconds: <?= (int)$remainingSeconds ?>,
     total: <?= (int)count($questions) ?>
   })"
-  x-init="init()"
+  x-init="init($el)"
 >
   <div class="flex items-start justify-between gap-4 mb-4">
     <div>
@@ -33,7 +33,7 @@ declare(strict_types=1);
       <button
         type="button"
         class="px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
-        @click="saveNow()"
+        @click="saveNow(false)"
       >
         Save
       </button>
@@ -101,9 +101,9 @@ declare(strict_types=1);
 
     <!-- Right: questions -->
     <section class="lg:col-span-9">
-      <form x-ref="form" method="post" action="/public/index.php?r=quiz_take&id=<?= (int)$attempt['id'] ?>">
+      <form x-ref="form" method="post" action="/public/index.php?r=quiz_take&attempt_id=<?= (int)$attempt['id'] ?>">
         <?= csrf_field() ?>
-        <input type="hidden" name="id" value="<?= (int)$attempt['id'] ?>">
+        <input type="hidden" name="attempt_id" value="<?= (int)$attempt['id'] ?>">
         <input type="hidden" name="submit_quiz" x-ref="submitFlag" value="0">
 
         <div class="space-y-4">
@@ -113,10 +113,15 @@ declare(strict_types=1);
               $aqId = (int)$q['aq_id'];
               $sel = (string)($q['selected_option'] ?? '');
               $marked = (int)($q['marked_flag'] ?? 0);
+              $answered = ($sel === 'A' || $sel === 'B' || $sel === 'C' || $sel === 'D') ? 1 : 0;
             ?>
             <div
-              class="p-4 rounded-2xl border border-gray-200 bg-white"
+              class="question-card p-4 rounded-2xl border border-gray-200 bg-white"
               x-show="isVisible(<?= $n ?>)"
+              data-qnum="<?= $n ?>"
+              data-aqid="<?= $aqId ?>"
+              data-marked="<?= ($marked === 1) ? '1' : '0' ?>"
+              data-answered="<?= ($answered === 1) ? '1' : '0' ?>"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -177,11 +182,11 @@ declare(strict_types=1);
                 <?php endforeach; ?>
               </div>
 
-              <!-- Persist marked flag -->
+              <!-- Persist marked flag properly as 0/1 for every question -->
               <input
                 type="hidden"
                 name="marked[<?= $aqId ?>]"
-                :value="isMarked(<?= $aqId ?>) ? 1 : ''"
+                :value="isMarked(<?= $aqId ?>) ? '1' : '0'"
               >
             </div>
           <?php endforeach; ?>
@@ -275,9 +280,10 @@ function quizTakeScreen(cfg) {
     perPage: 5,
     page: 1,
 
-    // state maps (use plain objects for Alpine-friendliness)
-    answeredByNum: {},         // { "1": true, "2": true, ... }
-    markedByAq: {},
+    // state maps
+    answeredByNum: {},     // { "1": true, ... }
+    markedByAq: {},        // { "123": true, ... }
+    numToAq: {},           // { "1": 123, ... }
 
     // report modal
     reportOpen: false,
@@ -289,26 +295,40 @@ function quizTakeScreen(cfg) {
     pageLabel: '',
     totalPages: 1,
 
-    // SAFE iterable for x-for
+    // iterable for x-for
     navItems: [],
 
-    init() {
-      // Build an explicit iterable list for x-for
-      const t = Math.max(0, Number(this.total) || 0);
-      this.navItems = Array.from({ length: t }, (_, i) => i + 1);
+    init(rootEl) {
+  // Build iterable list for x-for (fixes h.forEach issue)
+  const t = Math.max(0, Number(this.total) || 0);
+  this.navItems = Array.from({ length: t }, (_, i) => i + 1);
 
-      this.recalcPages();
-      this.updateTimeLabel();
-      this.startTimer();
+  this.recalcPages();
+  this.updateTimeLabel();
+  this.startTimer();
 
-      // Initial scan: mark already-checked answers as "answered"
-      document.querySelectorAll('input[type="radio"]:checked').forEach((el) => {
-        const name = String(el.name || '');
-        // name like answers[123]
-        // We do not reliably know the question number from DOM without extra mapping,
-        // so we skip mapping here. (Answered state will be set on @change.)
-      });
-    },
+  // Use the component element passed from x-init as the root
+  const root = (rootEl && typeof rootEl.querySelectorAll === 'function')
+    ? rootEl
+    : (this.$el && typeof this.$el.querySelectorAll === 'function')
+      ? this.$el
+      : document;
+
+  // Seed answered + marked from DOM dataset (from DB values rendered by PHP)
+  root.querySelectorAll('.question-card[data-qnum][data-aqid]').forEach((el) => {
+    const qnum = parseInt(el.getAttribute('data-qnum') || '0', 10);
+    const aqid = parseInt(el.getAttribute('data-aqid') || '0', 10);
+    const marked = (el.getAttribute('data-marked') || '0') === '1';
+    const answered = (el.getAttribute('data-answered') || '0') === '1';
+
+    if (!Number.isNaN(qnum) && qnum > 0 && !Number.isNaN(aqid) && aqid > 0) {
+      this.numToAq[String(qnum)] = aqid;
+      if (marked) this.markedByAq[String(aqid)] = true;
+      if (answered) this.answeredByNum[String(qnum)] = true;
+    }
+  });
+},
+
 
     recalcPages() {
       const pp = Number(this.perPage || 5);
@@ -345,7 +365,7 @@ function quizTakeScreen(cfg) {
     jumpToNumber(n) {
       const pp = Number(this.perPage || 5);
       if (pp >= 9999) {
-        const cards = document.querySelectorAll('[x-show]');
+        const cards = this.$root.querySelectorAll('.question-card');
         const el = cards[n - 1];
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
@@ -358,23 +378,24 @@ function quizTakeScreen(cfg) {
 
     setAnswered(n, aqId) {
       this.answeredByNum[String(n)] = true;
+      // silent save to avoid spamming alerts
       this.saveNow(true);
     },
 
     navClass(n) {
-      const isCurrent = this.isVisible(n);
+      const isCurrent  = this.isVisible(n);
       const isAnswered = !!this.answeredByNum[String(n)];
-      const isFlagged = this.isFlaggedNumber(n);
+      const isFlagged  = this.isFlaggedNumber(n);
 
-      if (isCurrent) return 'border-sky-300 bg-sky-50 text-sky-800';
-      if (isFlagged) return 'border-amber-200 bg-amber-50 text-amber-900';
+      if (isCurrent)  return 'border-sky-300 bg-sky-50 text-sky-800';
+      if (isFlagged)  return 'border-amber-200 bg-amber-50 text-amber-900';
       if (isAnswered) return 'border-emerald-200 bg-emerald-50 text-emerald-900';
       return 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50';
     },
 
     navTitle(n) {
       const isAnswered = !!this.answeredByNum[String(n)];
-      const isFlagged = this.isFlaggedNumber(n);
+      const isFlagged  = this.isFlaggedNumber(n);
       if (isFlagged) return `Question ${n}: flagged`;
       if (isAnswered) return `Question ${n}: answered`;
       return `Question ${n}: not answered`;
@@ -392,8 +413,9 @@ function quizTakeScreen(cfg) {
     },
 
     isFlaggedNumber(n) {
-      // Still optional. If you want this exact, we can pass aqId per question number.
-      return false;
+      const aq = this.numToAq[String(n)];
+      if (!aq) return false;
+      return this.isMarked(aq);
     },
 
     // Timer
@@ -406,9 +428,7 @@ function quizTakeScreen(cfg) {
       setInterval(() => {
         this.remaining = Math.max(0, this.remaining - 1);
         this.updateTimeLabel();
-        if (this.remaining === 0) {
-          this.submitFinal();
-        }
+        if (this.remaining === 0) this.submitFinal();
       }, 1000);
     },
 
@@ -440,18 +460,16 @@ function quizTakeScreen(cfg) {
           body: fd
         });
 
-        // If your PHP route returns redirects/HTML, res.json() will throw.
-        // This guard prevents crashing Alpine.
         const ct = res.headers.get('content-type') || '';
         if (!ct.includes('application/json')) return;
 
         const j = await res.json();
         if (!silent && j && j.ok) {
-          // optional toast
+          // optional toast here
         }
       } catch (e) {
         if (!silent) {
-          // optional toast
+          // optional toast here
         }
       }
     },
@@ -480,7 +498,13 @@ function quizTakeScreen(cfg) {
       if (!this.reportQuestionId || !this.reportReason) return;
 
       const fd = new FormData();
-      fd.append('csrf_token', document.querySelector('input[name="csrf_token"]')?.value || '');
+
+      // pull CSRF from the quiz form specifically (fixes modal issues)
+      const tokenEl = this.$refs.form
+        ? this.$refs.form.querySelector('input[name="csrf_token"]')
+        : null;
+      if (tokenEl) fd.append('csrf_token', tokenEl.value);
+
       fd.append('question_id', String(this.reportQuestionId));
       fd.append('attempt_id', String(this.attemptId));
       fd.append('reason', this.reportReason);
@@ -492,6 +516,13 @@ function quizTakeScreen(cfg) {
           headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
           body: fd
         });
+
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          alertify.error('Could not send report.');
+          return;
+        }
+
         const j = await res.json();
         if (j && j.ok) {
           this.closeReport();
@@ -503,7 +534,6 @@ function quizTakeScreen(cfg) {
         alertify.error('Could not send report.');
       }
     }
-  }
+  };
 }
 </script>
-

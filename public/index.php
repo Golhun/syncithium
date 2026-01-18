@@ -11,7 +11,8 @@ require_once __DIR__ . '/../app/bootstrap.php';
 $routes = array_merge(
     require __DIR__ . '/../app/routes/auth.php',
     require __DIR__ . '/../app/routes/taxonomy_user.php',
-    require __DIR__ . '/../app/routes/questions_user.php'
+    require __DIR__ . '/../app/routes/questions_user.php',
+    require __DIR__ . '/../app/routes/admin_users.php'
 );
 
 // Route name from query param
