@@ -130,7 +130,7 @@ return [
         $user = require_login($db);
 
         // Accept both id and attempt_id to avoid URL mismatch errors
-        $attemptId = (int)($_GET['id'] ?? $_GET['attempt_id'] ?? $_POST['id'] ?? $_POST['attempt_id'] ?? 0);
+        $attemptId = (int)($_GET['id'] ?? ($_GET['attempt_id'] ?? ($_POST['id'] ?? ($_POST['attempt_id'] ?? 0))));
         if ($attemptId <= 0) {
             flash_set('error', 'Invalid attempt.');
             redirect('/public/index.php?r=taxonomy_selector');
@@ -297,7 +297,7 @@ return [
     'quiz_result' => function (PDO $db, array $config): void {
         $user = require_login($db);
 
-        $attemptId = (int)($_GET['id'] ?? $_GET['attempt_id'] ?? 0);
+        $attemptId = (int)($_GET['id'] ?? ($_GET['attempt_id'] ?? 0));
         if ($attemptId <= 0) {
             flash_set('error', 'Invalid quiz attempt.');
             redirect('/public/index.php?r=taxonomy_selector');

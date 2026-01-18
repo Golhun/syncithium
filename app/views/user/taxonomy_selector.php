@@ -216,6 +216,8 @@
     <div class="flex justify-end">
       <button
         type="submit"
+        name="start_quiz"
+        value="1"
         :disabled="selectedTopicIds.length === 0"
         class="px-4 py-2 rounded-lg text-sm text-white border border-sky-600"
         :class="selectedTopicIds.length === 0
