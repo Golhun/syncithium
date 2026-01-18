@@ -118,8 +118,7 @@
                 type="checkbox"
                 class="rounded border-gray-300"
                 :value="t.id"
-                @change="toggleTopic(t.id, $event.target.checked)"
-                :checked="selectedTopicIds.includes(t.id)"
+                x-model="selectedTopicIds"
               >
               <span x-text="t.label"></span>
             </label>
@@ -205,6 +204,7 @@ function quizStart(config) {
     moduleId: config.presetModuleId || '',
     subjectId: '',
 
+    // Alpine will keep this array in sync with the checkboxes
     selectedTopicIds: [],
 
     numQuestions: 20,
@@ -274,17 +274,6 @@ function quizStart(config) {
       if (!this.subjectId) return;
       const res = await fetch('/public/index.php?r=api_topics&subject_id=' + this.subjectId);
       this.topics = await res.json();
-    },
-
-    toggleTopic(id, checked) {
-      id = parseInt(id, 10);
-      if (checked) {
-        if (!this.selectedTopicIds.includes(id)) {
-          this.selectedTopicIds.push(id);
-        }
-      } else {
-        this.selectedTopicIds = this.selectedTopicIds.filter(tid => tid !== id);
-      }
     },
   };
 }
