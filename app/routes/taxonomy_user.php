@@ -1,59 +1,77 @@
 <?php
 declare(strict_types=1);
 
-/**
- * User-facing taxonomy routes:
- *  - taxonomy_selector
- *  - api_levels
- *  - api_modules
- *  - api_subjects
- *  - api_topics
- */
-
 return [
 
-    // Main selector screen for users (can later become quiz start UI)
+    // -------------------------
+    // Topic selector + quiz start (single step)
+    // -------------------------
     'taxonomy_selector' => function (PDO $db, array $config): void {
-        $u = require_login($db);
+        $user = require_login($db);
 
-        // We only preload levels here; modules/subjects/topics are fetched via APIs.
-        $stmt = $db->prepare("SELECT * FROM levels ORDER BY CAST(code AS UNSIGNED), code");
-        $stmt->execute();
-        $levels = $stmt->fetchAll() ?: [];
+        // Optional quick preset ?preset=gem201
+        $presetLevelId  = null;
+        $presetModuleId = null;
 
+        $preset = (string)($_GET['preset'] ?? '');
+        if ($preset === 'gem201') {
+            // Find Level "200"
+            $stmt = $db->prepare("SELECT id FROM levels WHERE code = :code LIMIT 1");
+            $stmt->execute([':code' => '200']);
+            if ($row = $stmt->fetch()) {
+                $presetLevelId = (int)$row['id'];
+
+                // Find Module "GEM 201" within that level
+                $stmt = $db->prepare("
+                    SELECT id
+                    FROM modules
+                    WHERE level_id = :lid AND code = :code
+                    LIMIT 1
+                ");
+                $stmt->execute([
+                    ':lid'  => $presetLevelId,
+                    ':code' => 'GEM 201',
+                ]);
+                if ($m = $stmt->fetch()) {
+                    $presetModuleId = (int)$m['id'];
+                }
+            }
+        }
+
+        // No POST handling here: the form on this page posts directly to quiz_start
         render('user/taxonomy_selector', [
-            'title'  => 'Choose Topics',
-            'levels' => $levels,
-            'user'   => $u,
+            'title'          => 'Start Quiz',
+            'user'           => $user,
+            'presetLevelId'  => $presetLevelId,
+            'presetModuleId' => $presetModuleId,
         ]);
     },
 
-    // Levels JSON
+    // -------------------------
+    // API: levels
+    // -------------------------
     'api_levels' => function (PDO $db, array $config): void {
         require_login($db);
         header('Content-Type: application/json; charset=utf-8');
 
-        $stmt = $db->prepare("SELECT id, code, name FROM levels ORDER BY CAST(code AS UNSIGNED), code");
-        $stmt->execute();
+        $stmt = $db->query("SELECT id, code, name FROM levels ORDER BY CAST(code AS UNSIGNED), code");
         $rows = $stmt->fetchAll() ?: [];
 
-        $out = [];
-        foreach ($rows as $l) {
-            $label = $l['code'];
-            if (!empty($l['name'])) {
-                $label .= ' - ' . $l['name'];
-            }
-            $out[] = [
-                'id'    => (int)$l['id'],
+        $out = array_map(static function (array $r): array {
+            $label = trim((string)$r['code'] . ' ' . (string)($r['name'] ?? ''));
+            return [
+                'id'    => (int)$r['id'],
                 'label' => $label,
             ];
-        }
+        }, $rows);
 
-        echo json_encode($out, JSON_UNESCAPED_SLASHES);
+        echo json_encode($out);
         exit;
     },
 
-    // Modules JSON
+    // -------------------------
+    // API: modules by level
+    // -------------------------
     'api_modules' => function (PDO $db, array $config): void {
         require_login($db);
         header('Content-Type: application/json; charset=utf-8');
@@ -64,27 +82,30 @@ return [
             exit;
         }
 
-        $stmt = $db->prepare("SELECT id, code, name FROM modules WHERE level_id = :lid ORDER BY code");
+        $stmt = $db->prepare("
+            SELECT id, code, name
+            FROM modules
+            WHERE level_id = :lid
+            ORDER BY code ASC, name ASC
+        ");
         $stmt->execute([':lid' => $levelId]);
         $rows = $stmt->fetchAll() ?: [];
 
-        $out = [];
-        foreach ($rows as $m) {
-            $label = $m['code'];
-            if (!empty($m['name'])) {
-                $label .= ' - ' . $m['name'];
-            }
-            $out[] = [
-                'id'    => (int)$m['id'],
+        $out = array_map(static function (array $r): array {
+            $label = trim((string)$r['code'] . ' ' . (string)($r['name'] ?? ''));
+            return [
+                'id'    => (int)$r['id'],
                 'label' => $label,
             ];
-        }
+        }, $rows);
 
-        echo json_encode($out, JSON_UNESCAPED_SLASHES);
+        echo json_encode($out);
         exit;
     },
 
-    // Subjects JSON
+    // -------------------------
+    // API: subjects by module
+    // -------------------------
     'api_subjects' => function (PDO $db, array $config): void {
         require_login($db);
         header('Content-Type: application/json; charset=utf-8');
@@ -95,22 +116,29 @@ return [
             exit;
         }
 
-        $stmt = $db->prepare("SELECT id, name FROM subjects WHERE module_id = :mid ORDER BY name");
+        $stmt = $db->prepare("
+            SELECT id, name
+            FROM subjects
+            WHERE module_id = :mid
+            ORDER BY name ASC
+        ");
         $stmt->execute([':mid' => $moduleId]);
         $rows = $stmt->fetchAll() ?: [];
 
-        $out = array_map(static function ($s) {
+        $out = array_map(static function (array $r): array {
             return [
-                'id'    => (int)$s['id'],
-                'label' => (string)$s['name'],
+                'id'    => (int)$r['id'],
+                'label' => (string)$r['name'],
             ];
         }, $rows);
 
-        echo json_encode($out, JSON_UNESCAPED_SLASHES);
+        echo json_encode($out);
         exit;
     },
 
-    // Topics JSON
+    // -------------------------
+    // API: topics by subject
+    // -------------------------
     'api_topics' => function (PDO $db, array $config): void {
         require_login($db);
         header('Content-Type: application/json; charset=utf-8');
@@ -121,18 +149,23 @@ return [
             exit;
         }
 
-        $stmt = $db->prepare("SELECT id, name FROM topics WHERE subject_id = :sid ORDER BY name");
+        $stmt = $db->prepare("
+            SELECT id, name
+            FROM topics
+            WHERE subject_id = :sid
+            ORDER BY name ASC
+        ");
         $stmt->execute([':sid' => $subjectId]);
         $rows = $stmt->fetchAll() ?: [];
 
-        $out = array_map(static function ($t) {
+        $out = array_map(static function (array $r): array {
             return [
-                'id'    => (int)$t['id'],
-                'label' => (string)$t['name'],
+                'id'    => (int)$r['id'],
+                'label' => (string)$r['name'],
             ];
         }, $rows);
 
-        echo json_encode($out, JSON_UNESCAPED_SLASHES);
+        echo json_encode($out);
         exit;
     },
 

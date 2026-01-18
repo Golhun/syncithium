@@ -4,7 +4,7 @@ declare(strict_types=1);
 /** @var string $title */
 $title = $title ?? 'Syncithium';
 
-// Get current user if possible
+// Current user (if any)
 $u = null;
 try {
     if (isset($db) && $db instanceof PDO) {
@@ -14,7 +14,7 @@ try {
     $u = null;
 }
 
-// Flash message (may be null)
+// Flash message
 $flash = function_exists('flash_take') ? flash_take() : null;
 ?>
 <!doctype html>
@@ -67,24 +67,18 @@ $flash = function_exists('flash_take') ? flash_take() : null;
                        href="/public/index.php?r=admin_reset_requests">
                         Reset requests
                     </a>
-
-                    <!-- NEW: admin can also start quiz -->
-                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=quiz_start">
-                        Start quiz
-                    </a>
                 <?php else: ?>
-    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-       href="/public/index.php?r=quiz_start">
-        Start quiz
-    </a>
-<?php endif; ?>
+                    <!-- Student view -->
+                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                       href="/public/index.php?r=taxonomy_selector">
+                        Topics
+                    </a>
+                <?php endif; ?>
 
-<a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-   href="/public/index.php?r=logout">
-    Sign out
-</a>
-
+                <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+                   href="/public/index.php?r=logout">
+                    Sign out
+                </a>
             </nav>
         <?php endif; ?>
     </div>

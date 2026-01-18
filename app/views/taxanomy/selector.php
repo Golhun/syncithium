@@ -5,7 +5,7 @@
 ?>
 <div
   class="max-w-5xl mx-auto"
-  x-data="quizTopicScreen({
+  x-data="taxonomySelector({
     presetLevelId: <?= $presetLevelId ? (int)$presetLevelId : 'null' ?>,
     presetModuleId: <?= $presetModuleId ? (int)$presetModuleId : 'null' ?>
   })"
@@ -16,7 +16,7 @@
     <div>
       <h1 class="text-2xl font-semibold">Start Quiz</h1>
       <p class="text-xs text-gray-500 mt-1">
-        Choose level, module, subject and topics, then set number of questions, scoring mode and timer.
+        Choose level, module, subject and topics, then set the number of questions, scoring mode and timer.
       </p>
     </div>
 
@@ -28,7 +28,7 @@
     </div>
   </div>
 
-  <!-- Info note -->
+  <!-- Info -->
   <div class="mb-4 p-4 rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-600">
     <strong class="font-medium">Note:</strong>
     You must select at least one topic. Questions are drawn randomly across the selected topics.
@@ -39,8 +39,8 @@
     <?= csrf_field() ?>
 
     <!-- Scope -->
-    <div class="p-4 rounded-xl border border-gray-200 bg-white space-y-3">
-      <div class="flex items-center justify-between text-xs mb-1">
+    <div class="p-4 rounded-xl border border-gray-200 bg-white space-y-4">
+      <div class="flex items-center justify-between text-xs">
         <span class="font-medium">Scope</span>
         <span class="text-gray-400">Level → Module → Subject → Topics</span>
       </div>
@@ -92,14 +92,14 @@
         </div>
       </div>
 
-      <!-- Topics as pills -->
-      <div class="mt-4">
+      <!-- Topics as chips -->
+      <div class="mt-2">
         <div class="flex items-center justify-between mb-2 text-xs">
           <span class="font-medium">Topics (multi select)</span>
           <span class="text-gray-500" x-text="'Selected: ' + selectedTopicIds.length"></span>
         </div>
 
-        <!-- Topic search -->
+        <!-- Search -->
         <div class="mb-3">
           <input
             type="text"
@@ -109,20 +109,20 @@
           >
         </div>
 
-        <!-- Pills -->
-        <div class="border border-gray-200 rounded-xl bg-white px-3 py-3">
-          <template x-if="filteredTopics.length === 0">
+        <!-- Chip list -->
+        <div class="border border-gray-200 rounded-xl bg-white px-3 py-3 min-h-[56px]">
+          <template x-if="filteredTopics().length === 0">
             <p class="text-xs text-gray-500">
               <span x-show="!subjectId">Select a subject to load topics.</span>
               <span x-show="subjectId">No topics match your search.</span>
             </p>
           </template>
 
-          <div class="flex flex-wrap gap-2" x-show="filteredTopics.length > 0">
-            <template x-for="t in filteredTopics" :key="t.id">
+          <div class="flex flex-wrap gap-2" x-show="filteredTopics().length > 0">
+            <template x-for="t in filteredTopics()" :key="t.id">
               <button
                 type="button"
-                @click="toggleTopic(t.id)"
+                @click.prevent="toggleTopic(t.id)"
                 class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium focus:outline-none"
                 :class="isSelected(t.id)
                   ? 'bg-pink-500 text-white'
@@ -217,7 +217,7 @@
 </div>
 
 <script>
-function quizTopicScreen(config) {
+function taxonomySelector(config) {
   return {
     // Data
     levels: [],
@@ -231,20 +231,13 @@ function quizTopicScreen(config) {
     subjectId: '',
     selectedTopicIds: [],
 
-    // Options
+    // Quiz options
     numQuestions: 20,
     scoringMode: 'standard',
     timerSeconds: 3600,
 
-    // UI
+    // Search
     topicSearch: '',
-
-    // Computed
-    get filteredTopics() {
-      if (!this.topicSearch) return this.topics;
-      const q = this.topicSearch.toLowerCase();
-      return this.topics.filter(t => (t.label || '').toLowerCase().includes(q));
-    },
 
     async init() {
       try {
@@ -264,6 +257,12 @@ function quizTopicScreen(config) {
       } catch (e) {
         this.levels = [];
       }
+    },
+
+    filteredTopics() {
+      if (!this.topicSearch) return this.topics;
+      const q = this.topicSearch.toLowerCase();
+      return this.topics.filter(t => (t.label || '').toLowerCase().includes(q));
     },
 
     normaliseModule(m) {

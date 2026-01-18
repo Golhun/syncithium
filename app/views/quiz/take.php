@@ -24,6 +24,7 @@
     <div class="text-right">
       <div class="text-xs text-gray-500 mb-1">Time remaining</div>
       <div class="px-3 py-2 rounded-lg border border-gray-200 inline-flex items-center gap-2">
+        <span class="text-xs text-gray-500">⏱</span>
         <span class="font-mono text-sm" x-text="timeDisplay"></span>
       </div>
     </div>
@@ -34,7 +35,6 @@
         action="/public/index.php?r=quiz_take&id=<?= (int)$attempt['id'] ?>"
         class="space-y-4">
     <?= csrf_field() ?>
-    <input type="hidden" name="id" value="<?= (int)$attempt['id'] ?>">
 
     <?php foreach ($questions as $index => $q): ?>
       <?php
@@ -47,9 +47,6 @@
             <div class="text-xs text-gray-500 mb-1">Question <?= $number ?></div>
             <div class="text-sm font-medium mb-3">
               <?= nl2br(htmlspecialchars((string)$q['question_text'])) ?>
-            </div>
-            <div class="text-[11px] text-gray-500">
-              Topic: <?= htmlspecialchars((string)$q['topic_name']) ?>
             </div>
           </div>
           <label class="flex items-center gap-2 text-xs text-gray-500">
@@ -72,7 +69,7 @@
           ];
           foreach ($options as $letter => $text):
           ?>
-          <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50">
             <input type="radio"
                    name="answers[<?= (int)$q['aq_id'] ?>]"
                    value="<?= $letter ?>"

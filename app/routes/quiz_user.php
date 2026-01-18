@@ -4,59 +4,59 @@ declare(strict_types=1);
 return [
 
     // -------------------------
-    // Quiz: start (select topics, timer, scoring)
-    // GET = show form, POST = create attempt
+    // Quiz: start (configure attempt)
     // -------------------------
-    'quiz_start' => function (PDO $db, array $config): void {
-        $user = require_login($db);
+'quiz_start' => function (PDO $db, array $config): void {
+    $user = require_login($db);
 
-        // Optional preset: Level 200, GEM 201
-        $presetLevelId  = null;
-        $presetModuleId = null;
+    // Any direct GET to quiz_start should go to the main selector screen
+    if (!is_post()) {
+        redirect('/public/index.php?r=taxonomy_selector');
+    }
 
-        $preset = (string)($_GET['preset'] ?? '');
-        if ($preset === 'gem201') {
-            // Find level with code '200'
-            $stmt = $db->prepare("SELECT id FROM levels WHERE code = :code LIMIT 1");
-            $stmt->execute([':code' => '200']);
-            if ($row = $stmt->fetch()) {
-                $presetLevelId = (int)$row['id'];
+    // From here on we know it is POST from taxonomy_selector
+    csrf_verify();
 
-                // Find module GEM 201 inside this level
-                $stmt = $db->prepare("
-                    SELECT m.id
-                    FROM modules m
-                    WHERE m.level_id = :lid AND m.code = :code
-                    LIMIT 1
-                ");
-                $stmt->execute([':lid' => $presetLevelId, ':code' => 'GEM 201']);
-                if ($m = $stmt->fetch()) {
-                    $presetModuleId = (int)$m['id'];
-                }
-            }
-        }
+    $topicIds = $_POST['topic_ids'] ?? [];
+    if (!is_array($topicIds)) {
+        $topicIds = [];
+    }
 
-        // Handle POST: create attempt
+    $topicIds = array_values(array_unique(array_filter(
+        array_map(static fn($v) => (int)$v, $topicIds),
+        static fn($v) => $v > 0
+    )));
+
+    if (count($topicIds) === 0) {
+        flash_set('error', 'Select at least one topic.');
+        redirect('/public/index.php?r=taxonomy_selector');
+    }
+
+        // Build topic summary for display
+        $placeholders = implode(',', array_fill(0, count($topicIds), '?'));
+        $stmt = $db->prepare("
+            SELECT
+              t.id        AS topic_id,
+              t.name      AS topic_name,
+              s.name      AS subject_name,
+              m.code      AS module_code,
+              l.code      AS level_code
+            FROM topics t
+            JOIN subjects s ON s.id = t.subject_id
+            JOIN modules  m ON m.id = s.module_id
+            JOIN levels   l ON l.id = m.level_id
+            WHERE t.id IN ($placeholders)
+            ORDER BY l.code, m.code, s.name, t.name
+        ");
+        $stmt->execute($topicIds);
+        $topicSummary = $stmt->fetchAll() ?: [];
+
+        // POST: create attempt
         if (is_post()) {
             csrf_verify();
 
-            $topicIds = $_POST['topic_ids'] ?? [];
-            if (!is_array($topicIds)) {
-                $topicIds = [];
-            }
-
-            $topicIds = array_values(array_unique(array_filter(
-                array_map(static fn($v) => (int)$v, $topicIds),
-                static fn($v) => $v > 0
-            )));
-
-            if (count($topicIds) === 0) {
-                flash_set('error', 'Select at least one topic.');
-                redirect('/public/index.php?r=quiz_start');
-            }
-
             $numQuestions = (int)($_POST['num_questions'] ?? 20);
-            if ($numQuestions < 1) $numQuestions = 1;
+            if ($numQuestions < 1)  $numQuestions = 1;
             if ($numQuestions > 200) $numQuestions = 200;
 
             $scoringMode = (string)($_POST['scoring_mode'] ?? 'standard');
@@ -88,12 +88,13 @@ return [
 
             if (count($questionIds) === 0) {
                 flash_set('error', 'No active questions found for the selected topics.');
-                redirect('/public/index.php?r=quiz_start');
+                redirect('/public/index.php?r=taxonomy_selector');
+
             }
 
             $totalQuestions = count($questionIds);
 
-            // Create attempt and attempt_questions in one transaction
+            // Create attempt + attempt_questions
             $db->beginTransaction();
             try {
                 $stmt = $db->prepare("
@@ -161,16 +162,14 @@ return [
         }
 
         render('quiz/start', [
-            'title'          => 'Start Quiz',
-            'user'           => $user,
-            'presetLevelId'  => $presetLevelId,
-            'presetModuleId' => $presetModuleId,
+            'title'        => 'Start Quiz',
+            'user'         => $user,
+            'topicSummary' => $topicSummary,
         ]);
     },
 
     // -------------------------
-    // Quiz: take (answer and submit)
-    // GET = show questions, POST = submit answers and score
+    // Quiz: take (answer + timer)
     // -------------------------
     'quiz_take' => function (PDO $db, array $config): void {
         $user = require_login($db);
@@ -205,12 +204,10 @@ return [
             $remaining = 0;
         }
 
-        // If time is over and not yet submitted, auto finalise as is
+        // Auto-finalise on GET if time is over
         if ($remaining === 0 && $attempt['status'] === 'in_progress' && !is_post()) {
-            // Finalise with current answers (if any)
             $db->beginTransaction();
             try {
-                // Compute scores
                 $stats = [
                     'correct' => 0,
                     'wrong'   => 0,
@@ -230,15 +227,14 @@ return [
 
                 $updateQ = $db->prepare("
                     UPDATE attempt_questions
-                    SET selected_option = :sel,
-                        is_correct = :is_correct,
+                    SET is_correct = :is_correct,
                         updated_at = NOW()
                     WHERE id = :id
                 ");
 
                 foreach ($rows as $row) {
                     $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
-                    if (!in_array($sel, ['A','B','C','D'], true)) {
+                    if (!in_array($sel, ['A', 'B', 'C', 'D'], true)) {
                         $sel = null;
                     }
 
@@ -254,13 +250,11 @@ return [
                     }
 
                     $updateQ->execute([
-                        ':sel'        => $sel,
                         ':is_correct' => $isCorrect,
                         ':id'         => (int)$row['id'],
                     ]);
                 }
 
-                // Score calculation
                 if ($attempt['scoring_mode'] === 'negative') {
                     $stats['score'] = $stats['correct'] - $stats['wrong'];
                 } else {
@@ -272,9 +266,9 @@ return [
                     SET status = 'submitted',
                         submitted_at = NOW(),
                         raw_correct = :c,
-                        raw_wrong = :w,
-                        score = :s,
-                        updated_at = NOW()
+                        raw_wrong   = :w,
+                        score       = :s,
+                        updated_at  = NOW()
                     WHERE id = :id
                 ");
                 $stmtU->execute([
@@ -293,7 +287,7 @@ return [
             redirect('/public/index.php?r=quiz_review&id=' . $attemptId);
         }
 
-        // Handle POST submission from the form
+        // POST: user submits answers
         if (is_post()) {
             csrf_verify();
 
@@ -302,13 +296,18 @@ return [
                 $answers = [];
             }
 
+            $marked = $_POST['marked'] ?? [];
+            if (!is_array($marked)) {
+                $marked = [];
+            }
+
             $db->beginTransaction();
             try {
-                // Update selected options
                 $stmtUpdate = $db->prepare("
                     UPDATE attempt_questions
                     SET selected_option = :sel,
-                        updated_at = NOW()
+                        marked_flag     = :marked,
+                        updated_at      = NOW()
                     WHERE id = :id AND attempt_id = :aid
                 ");
 
@@ -317,14 +316,17 @@ return [
                     if ($aqid <= 0) continue;
 
                     $opt = strtoupper(trim((string)$sel));
-                    if (!in_array($opt, ['A','B','C','D'], true)) {
+                    if (!in_array($opt, ['A', 'B', 'C', 'D'], true)) {
                         $opt = null;
                     }
 
+                    $isMarked = isset($marked[$aqid]) ? 1 : 0;
+
                     $stmtUpdate->execute([
-                        ':sel' => $opt,
-                        ':id'  => $aqid,
-                        ':aid' => $attemptId,
+                        ':sel'    => $opt,
+                        ':marked' => $isMarked,
+                        ':id'     => $aqid,
+                        ':aid'    => $attemptId,
                     ]);
                 }
 
@@ -355,7 +357,7 @@ return [
 
                 foreach ($rows as $row) {
                     $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
-                    if (!in_array($sel, ['A','B','C','D'], true)) {
+                    if (!in_array($sel, ['A', 'B', 'C', 'D'], true)) {
                         $sel = null;
                     }
 
@@ -413,6 +415,7 @@ return [
             SELECT
               aq.id AS aq_id,
               aq.selected_option,
+              aq.marked_flag,
               q.id   AS question_id,
               q.question_text,
               q.option_a,
@@ -423,7 +426,7 @@ return [
               t.name AS topic_name
             FROM attempt_questions aq
             JOIN questions q ON q.id = aq.question_id
-            JOIN topics t    ON t.id = q.topic_id
+            JOIN topics   t  ON t.id = q.topic_id
             WHERE aq.attempt_id = :aid
             ORDER BY aq.position ASC
         ");
@@ -439,7 +442,7 @@ return [
     },
 
     // -------------------------
-    // Quiz: review (see answers, per-topic performance)
+    // Quiz: review
     // -------------------------
     'quiz_review' => function (PDO $db, array $config): void {
         $user = require_login($db);
@@ -459,7 +462,6 @@ return [
             redirect('/public/index.php');
         }
 
-        // Load per-question details
         $stmt = $db->prepare("
             SELECT
               aq.id AS aq_id,
@@ -487,7 +489,6 @@ return [
         $stmt->execute([':aid' => $attemptId]);
         $questions = $stmt->fetchAll() ?: [];
 
-        // Aggregated performance by topic / subject / module / level
         $stmt = $db->prepare("
             SELECT
               t.id       AS topic_id,
