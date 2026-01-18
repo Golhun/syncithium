@@ -446,44 +446,52 @@ return [
         ]);
     },
 
-    'question_report_create' => function (PDO $db, array $config): void {
-        $user = require_login($db);
+  'question_report_create' => function (PDO $db, array $config): void {
+    $user = require_login($db);
 
-        if (!is_post()) {
-            http_json(['ok' => false, 'error' => 'Method not allowed'], 405);
-        }
+    if (!is_post()) {
+        http_json(['ok' => false, 'error' => 'Method not allowed'], 405);
+    }
 
-        csrf_verify();
+    csrf_verify();
 
-        $questionId = (int)($_POST['question_id'] ?? 0);
-        $attemptId  = (int)($_POST['attempt_id'] ?? 0);
-        $reason     = trim((string)($_POST['reason'] ?? ''));
-        $details    = trim((string)($_POST['details'] ?? ''));
+    $questionId = (int)($_POST['question_id'] ?? 0);
+    $attemptId  = (int)($_POST['attempt_id'] ?? 0);
 
-        if ($questionId <= 0 || $reason === '') {
-            http_json(['ok' => false, 'error' => 'Question and reason are required.'], 422);
-        }
+    // DB column is report_type (not reason)
+    $reportType = trim((string)($_POST['reason'] ?? $_POST['report_type'] ?? ''));
 
-        // Validate attempt_id belongs to user (optional linkage)
-        if ($attemptId > 0) {
-            $st = $db->prepare("SELECT id FROM attempts WHERE id = :id AND user_id = :uid LIMIT 1");
-            $st->execute(['id' => $attemptId, 'uid' => (int)$user['id']]);
-            if (!$st->fetch()) $attemptId = 0;
-        }
+    // DB column is message (not details)
+    $message    = trim((string)($_POST['details'] ?? $_POST['message'] ?? ''));
 
-        $stmt = $db->prepare("
-            INSERT INTO question_reports (user_id, attempt_id, question_id, reason, details, status, created_at, updated_at)
-            VALUES (:uid, :aid, :qid, :reason, :details, 'pending', UTC_TIMESTAMP(), UTC_TIMESTAMP())
-        ");
-        $stmt->execute([
-            'uid'     => (int)$user['id'],
-            'aid'     => $attemptId > 0 ? $attemptId : null,
-            'qid'     => $questionId,
-            'reason'  => $reason,
-            'details' => $details !== '' ? $details : null,
-        ]);
+    if ($questionId <= 0 || $reportType === '') {
+        http_json(['ok' => false, 'error' => 'Question and reason are required.'], 422);
+    }
 
-        http_json(['ok' => true]);
-    },
+    // If attempt_id provided, validate it belongs to user
+    if ($attemptId > 0) {
+        $st = $db->prepare("SELECT id FROM attempts WHERE id = :id AND user_id = :uid LIMIT 1");
+        $st->execute([':id' => $attemptId, ':uid' => (int)$user['id']]);
+        if (!$st->fetch()) $attemptId = 0;
+    }
+
+    // Use your actual schema: report_type + message
+    $stmt = $db->prepare("
+        INSERT INTO question_reports
+            (user_id, attempt_id, question_id, report_type, message, status, created_at, updated_at)
+        VALUES
+            (:uid, :aid, :qid, :rt, :msg, 'open', NOW(), NOW())
+    ");
+    $stmt->execute([
+        ':uid' => (int)$user['id'],
+        ':aid' => $attemptId > 0 ? $attemptId : null,
+        ':qid' => $questionId,
+        ':rt'  => $reportType,
+        ':msg' => ($message !== '' ? $message : null),
+    ]);
+
+    http_json(['ok' => true]);
+},
+
 
 ];

@@ -12,7 +12,10 @@ $routes = array_merge(
     require __DIR__ . '/../app/routes/auth.php',
     require __DIR__ . '/../app/routes/taxonomy_user.php',
     require __DIR__ . '/../app/routes/questions_user.php',
-    require __DIR__ . '/../app/routes/admin_users.php'
+    require __DIR__ . '/../app/routes/admin_users.php',
+    require __DIR__ . '/../app/routes/questions_admin.php',
+    require __DIR__ . '/../app/routes/taxonomy_admin.php',
+
 );
 
 // Route name from query param
