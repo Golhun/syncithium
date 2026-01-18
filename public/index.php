@@ -1,10 +1,19 @@
 <?php
 declare(strict_types=1);
 
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
+
 require_once __DIR__ . '/../app/bootstrap.php';
 
 // Load route map
-$routes = require __DIR__ . '/../app/routes/routes.php';
+$routes = array_merge(
+    require __DIR__ . '/../app/routes/auth.php',
+    require __DIR__ . '/../app/routes/taxonomy_user.php',
+    require __DIR__ . '/../app/routes/questions_user.php'
+);
+
 
 // Route name from query param
 $route = $_GET['r'] ?? 'login';
