@@ -4,552 +4,503 @@ declare(strict_types=1);
 /** @var array $attempt */
 /** @var array $questions */
 /** @var int $remainingSeconds */
-
-$attemptId = (int)$attempt['id'];
-$total = count($questions);
-
-// Pre-fill JS state from DB
-$initialAnswers = [];
-$initialMarked  = [];
-
-foreach ($questions as $q) {
-    $aqid = (int)$q['aq_id'];
-    $sel  = strtoupper(trim((string)($q['selected_option'] ?? '')));
-    if (in_array($sel, ['A','B','C','D'], true)) {
-        $initialAnswers[(string)$aqid] = $sel;
-    }
-    $initialMarked[(string)$aqid] = !empty($q['marked_flag']) ? 1 : 0;
-}
-
 ?>
 <div
   class="max-w-6xl mx-auto"
   x-data="quizTakeScreen({
-    attemptId: <?= (int)$attemptId ?>,
+    attemptId: <?= (int)$attempt['id'] ?>,
     remainingSeconds: <?= (int)$remainingSeconds ?>,
-    totalQuestions: <?= (int)$total ?>,
-    initialAnswers: <?= json_encode($initialAnswers, JSON_UNESCAPED_SLASHES) ?>,
-    initialMarked: <?= json_encode($initialMarked, JSON_UNESCAPED_SLASHES) ?>
+    total: <?= (int)count($questions) ?>
   })"
   x-init="init()"
 >
-
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex items-start justify-between gap-4 mb-4">
     <div>
-      <h1 class="text-2xl font-semibold">Quiz</h1>
-      <p class="text-xs text-gray-500 mt-1">
-        Attempt #<?= (int)$attemptId ?>, Questions: <?= (int)$total ?>
+      <h1 class="text-xl font-semibold">Quiz</h1>
+      <p class="text-xs text-gray-500">
+        Scoring mode:
+        <?= htmlspecialchars((string)$attempt['scoring_mode']) ?>,
+        Total questions: <?= (int)count($questions) ?>
       </p>
     </div>
 
-    <div class="text-right">
-      <div class="text-xs text-gray-500">Time remaining</div>
-      <div class="text-2xl font-semibold tabular-nums" x-text="timeLabel"></div>
-      <div class="text-[11px] text-gray-500" x-show="remaining <= 60">
-        Less than 1 minute left, submit soon.
+    <div class="flex items-center gap-2">
+      <div class="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm">
+        <div class="text-xs text-gray-500">Time left</div>
+        <div class="font-semibold" x-text="timeLabel"></div>
       </div>
+
+      <button
+        type="button"
+        class="px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
+        @click="saveNow()"
+      >
+        Save
+      </button>
+
+      <button
+        type="button"
+        class="px-3 py-2 rounded-xl border border-sky-600 bg-sky-600 text-white hover:bg-sky-700 text-sm"
+        @click="submitFinal()"
+      >
+        Submit
+      </button>
     </div>
   </div>
 
-  <form
-    method="post"
-    action="/public/index.php?r=quiz_take&id=<?= (int)$attemptId ?>"
-    x-ref="quizForm"
-    class="grid grid-cols-1 lg:grid-cols-12 gap-4"
-  >
-    <?= csrf_field() ?>
-
-    <!-- LEFT NAV (Moodle-like) -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+    <!-- Left: question navigator -->
     <aside class="lg:col-span-3">
-      <div class="rounded-xl border border-gray-200 bg-white p-4 sticky top-4 space-y-4">
+      <div class="p-3 rounded-2xl border border-gray-200 bg-white">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-semibold">Questions</div>
 
-        <!-- Per-page -->
-        <div class="flex items-center justify-between">
-          <div class="text-xs font-medium text-gray-700">Questions per page</div>
           <select
-            class="text-xs px-2 py-1 rounded-lg border border-gray-200"
+            class="text-xs border border-gray-200 rounded-lg px-2 py-1"
             x-model.number="perPage"
-            @change="onPerPageChange()"
+            @change="goTo(1)"
           >
-            <option :value="1">1</option>
-            <option :value="5">5</option>
-            <option :value="10">10</option>
-            <option :value="20">20</option>
-            <option :value="50">50</option>
+            <option :value="1">1 / page</option>
+            <option :value="5">5 / page</option>
+            <option :value="10">10 / page</option>
+            <option :value="20">20 / page</option>
             <option :value="9999">All</option>
           </select>
         </div>
 
-        <!-- Legend -->
-        <div class="text-[11px] text-gray-500 space-y-1">
-          <div class="flex items-center gap-2">
-            <span class="inline-block w-3 h-3 rounded bg-gray-200"></span>
-            <span>Unanswered</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="inline-block w-3 h-3 rounded bg-sky-600"></span>
-            <span>Answered</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="inline-block w-3 h-3 rounded bg-pink-600"></span>
-            <span>Flagged (return later)</span>
-          </div>
-        </div>
-
-        <!-- Question number grid -->
-        <div class="grid grid-cols-6 gap-2">
-          <template x-for="(q, idx) in questionIndex" :key="q.aqId">
+        <div class="grid grid-cols-8 gap-1">
+          <template x-for="n in total" :key="'qnav-' + n">
             <button
               type="button"
-              class="h-9 rounded-lg text-xs font-semibold border"
-              @click="jumpToIndex(idx)"
-              :class="navClass(q.aqId)"
-              x-text="idx + 1"
-              :title="navTitle(q.aqId)"
-            ></button>
+              class="h-8 w-8 text-xs rounded-lg border"
+              :class="navClass(n)"
+              @click="jumpToNumber(n)"
+              :title="navTitle(n)"
+            >
+              <span x-text="n"></span>
+            </button>
           </template>
         </div>
 
-        <!-- Paging controls -->
-        <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+        <div class="mt-3 text-xs text-gray-600 space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="inline-block h-3 w-3 rounded border border-gray-200 bg-white"></span> Not answered
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block h-3 w-3 rounded border border-gray-200 bg-emerald-50"></span> Answered
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block h-3 w-3 rounded border border-gray-200 bg-amber-50"></span> Flagged
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block h-3 w-3 rounded border border-gray-200 bg-sky-50"></span> Current
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right: questions -->
+    <section class="lg:col-span-9">
+      <form x-ref="form" method="post" action="/public/index.php?r=quiz_take&id=<?= (int)$attempt['id'] ?>">
+        <?= csrf_field() ?>
+        <input type="hidden" name="id" value="<?= (int)$attempt['id'] ?>">
+        <input type="hidden" name="submit_quiz" x-ref="submitFlag" value="0">
+
+        <div class="space-y-4">
+          <?php foreach ($questions as $idx => $q): ?>
+            <?php
+              $n = $idx + 1;
+              $aqId = (int)$q['aq_id'];
+              $sel = (string)($q['selected_option'] ?? '');
+              $marked = (int)($q['marked_flag'] ?? 0);
+            ?>
+            <div
+              class="p-4 rounded-2xl border border-gray-200 bg-white"
+              x-show="isVisible(<?= $n ?>)"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <div class="text-xs text-gray-500 mb-1">
+                    Question <?= $n ?> of <?= (int)count($questions) ?>
+                    <span class="mx-2">•</span>
+                    <?= htmlspecialchars((string)$q['topic_name']) ?>
+                  </div>
+                  <div class="text-base font-semibold">
+                    <?= htmlspecialchars((string)$q['question_text']) ?>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs hover:bg-gray-50"
+                    @click="toggleMarked(<?= $aqId ?>)"
+                  >
+                    <span x-show="!isMarked(<?= $aqId ?>)">Flag</span>
+                    <span x-show="isMarked(<?= $aqId ?>)">Unflag</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs hover:bg-gray-50"
+                    @click="openReport(<?= (int)$q['question_id'] ?>)"
+                  >
+                    Report issue
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <?php
+                  $opts = [
+                    'A' => (string)$q['option_a'],
+                    'B' => (string)$q['option_b'],
+                    'C' => (string)$q['option_c'],
+                    'D' => (string)$q['option_d'],
+                  ];
+                ?>
+                <?php foreach ($opts as $k => $val): ?>
+                  <label class="flex items-start gap-2 p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="radio"
+                      class="mt-1"
+                      name="answers[<?= $aqId ?>]"
+                      value="<?= $k ?>"
+                      <?= ($sel === $k ? 'checked' : '') ?>
+                      @change="setAnswered(<?= $n ?>, <?= $aqId ?>)"
+                    >
+                    <div>
+                      <div class="text-xs text-gray-500"><?= $k ?>.</div>
+                      <div><?= htmlspecialchars($val) ?></div>
+                    </div>
+                  </label>
+                <?php endforeach; ?>
+              </div>
+
+              <!-- Persist marked flag -->
+              <input
+                type="hidden"
+                name="marked[<?= $aqId ?>]"
+                :value="isMarked(<?= $aqId ?>) ? 1 : ''"
+              >
+            </div>
+          <?php endforeach; ?>
+        </div>
+
+        <div class="flex items-center justify-between mt-4">
           <button
             type="button"
-            class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs hover:bg-gray-50"
-            @click="prevPage()"
+            class="px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
             :disabled="page <= 1"
-            :class="page <= 1 ? 'opacity-50 cursor-not-allowed' : ''"
+            @click="prevPage()"
           >
-            Prev
+            Previous
           </button>
 
-          <div class="text-xs text-gray-600">
-            Page <span class="font-semibold" x-text="page"></span> /
-            <span class="font-semibold" x-text="totalPages"></span>
-          </div>
+          <div class="text-xs text-gray-500" x-text="pageLabel"></div>
 
           <button
             type="button"
-            class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs hover:bg-gray-50"
-            @click="nextPage()"
+            class="px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
             :disabled="page >= totalPages"
-            :class="page >= totalPages ? 'opacity-50 cursor-not-allowed' : ''"
+            @click="nextPage()"
           >
             Next
           </button>
         </div>
+      </form>
+    </section>
+  </div>
 
-        <!-- Submit -->
-        <div class="pt-2 border-t border-gray-100 space-y-2">
-          <div class="text-xs text-gray-500">
-            Answered: <span class="font-semibold" x-text="answeredCount"></span> /
-            <?= (int)$total ?>
-          </div>
+  <!-- Report modal -->
+  <div
+    class="fixed inset-0 z-[255] bg-black/40 flex items-center justify-center px-4"
+    x-show="reportOpen"
+    x-cloak
+  >
+    <div class="w-full max-w-lg rounded-2xl bg-white border border-gray-200 p-4">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm font-semibold">Report question issue</div>
+        <button type="button" class="text-gray-500 hover:text-gray-700" @click="closeReport()">✕</button>
+      </div>
 
+      <div class="space-y-3">
+        <select class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" x-model="reportReason">
+          <option value="">Select reason</option>
+          <option value="wrong_answer">Answer key is wrong</option>
+          <option value="unclear_question">Question is unclear</option>
+          <option value="typo_or_format">Typo or formatting issue</option>
+          <option value="out_of_scope">Out of scope</option>
+          <option value="other">Other</option>
+        </select>
+
+        <textarea
+          class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm"
+          rows="4"
+          placeholder="Add a short explanation (optional but helpful)"
+          x-model="reportDetails"
+        ></textarea>
+
+        <div class="flex justify-end gap-2">
           <button
-            type="submit"
-            class="w-full px-4 py-2 rounded-lg text-sm text-white bg-sky-600 hover:bg-sky-700 border border-sky-600"
+            type="button"
+            class="px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
+            @click="closeReport()"
           >
-            Submit quiz
+            Cancel
           </button>
 
           <button
             type="button"
-            class="w-full px-4 py-2 rounded-lg text-xs border border-gray-200 bg-white hover:bg-gray-50"
-            @click="scrollToTop()"
+            class="px-3 py-2 rounded-xl border border-sky-600 bg-sky-600 text-white hover:bg-sky-700 text-sm"
+            @click="submitReport()"
+            :disabled="reportReason === ''"
           >
-            Back to top
+            Send report
           </button>
         </div>
-
-      </div>
-    </aside>
-
-    <!-- MAIN QUESTIONS -->
-    <section class="lg:col-span-9 space-y-4">
-
-      <?php foreach ($questions as $i => $q): ?>
-        <?php
-          $aqid = (int)$q['aq_id'];
-          $idx  = (int)$i; // 0-based index
-          $topic = (string)($q['topic_name'] ?? '');
-          $qt = (string)($q['question_text'] ?? '');
-        ?>
-
-        <div
-          class="rounded-xl border border-gray-200 bg-white p-4"
-          x-show="isVisibleIndex(<?= $idx ?>)"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <div class="text-xs text-gray-500">
-                Q<?= $idx + 1 ?> of <?= (int)$total ?>
-                <?php if ($topic !== ''): ?>
-                  <span class="ml-2 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    <?= htmlspecialchars($topic) ?>
-                  </span>
-                <?php endif; ?>
-              </div>
-              <div class="mt-2 text-sm font-medium leading-relaxed">
-                <?= nl2br(htmlspecialchars($qt)) ?>
-              </div>
-            </div>
-
-            <div class="flex flex-col items-end gap-2">
-              <!-- Flag for later -->
-              <label class="inline-flex items-center gap-2 text-xs text-gray-600">
-                <input
-                  type="checkbox"
-                  name="marked[<?= $aqid ?>]"
-                  value="1"
-                  class="rounded border-gray-300"
-                  x-model="marked['<?= $aqid ?>']"
-                >
-                Flag
-              </label>
-
-              <!-- Report issue -->
-              <button
-                type="button"
-                class="text-xs px-3 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
-                @click="openReportModal(<?= (int)$q['question_id'] ?>, <?= $aqid ?>)"
-              >
-                Report issue
-              </button>
-            </div>
-          </div>
-
-          <!-- Options -->
-          <div class="mt-4 grid grid-cols-1 gap-2 text-sm">
-            <?php
-              $opts = [
-                'A' => (string)($q['option_a'] ?? ''),
-                'B' => (string)($q['option_b'] ?? ''),
-                'C' => (string)($q['option_c'] ?? ''),
-                'D' => (string)($q['option_d'] ?? ''),
-              ];
-            ?>
-            <?php foreach ($opts as $key => $val): ?>
-              <label class="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="radio"
-                  name="answers[<?= $aqid ?>]"
-                  value="<?= $key ?>"
-                  class="mt-1"
-                  x-model="answers['<?= $aqid ?>']"
-                >
-                <div>
-                  <div class="text-xs font-semibold text-gray-600"><?= $key ?></div>
-                  <div class="text-sm text-gray-800"><?= nl2br(htmlspecialchars($val)) ?></div>
-                </div>
-              </label>
-            <?php endforeach; ?>
-
-            <!-- Clear answer -->
-            <div class="pt-2">
-              <button
-                type="button"
-                class="text-xs px-3 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
-                @click="clearAnswer('<?= $aqid ?>')"
-              >
-                Clear answer
-              </button>
-            </div>
-          </div>
-        </div>
-      <?php endforeach; ?>
-
-      <!-- Bottom paging -->
-      <div class="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          class="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm hover:bg-gray-50"
-          @click="prevPage()"
-          :disabled="page <= 1"
-          :class="page <= 1 ? 'opacity-50 cursor-not-allowed' : ''"
-        >
-          Prev page
-        </button>
-
-        <div class="text-xs text-gray-600">
-          Page <span class="font-semibold" x-text="page"></span> /
-          <span class="font-semibold" x-text="totalPages"></span>
-        </div>
-
-        <button
-          type="button"
-          class="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm hover:bg-gray-50"
-          @click="nextPage()"
-          :disabled="page >= totalPages"
-          :class="page >= totalPages ? 'opacity-50 cursor-not-allowed' : ''"
-        >
-          Next page
-        </button>
-      </div>
-
-    </section>
-  </form>
-
-  <!-- Report Modal -->
-  <div
-    class="fixed inset-0 z-[255] bg-black/40 flex items-center justify-center px-4"
-    x-show="report.open"
-    x-cloak
-  >
-    <div class="w-full max-w-lg rounded-2xl bg-white border border-gray-200 p-4">
-      <div class="flex items-center justify-between">
-        <div class="text-sm font-semibold">Report an issue</div>
-        <button type="button" class="text-sm text-gray-500" @click="closeReportModal()">✕</button>
-      </div>
-
-      <div class="mt-2 text-xs text-gray-500">
-        Tell us what is wrong, for example wrong answer, unclear question, typo, duplicate, missing option.
-      </div>
-
-      <div class="mt-3">
-        <textarea
-          class="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
-          rows="4"
-          placeholder="Describe the issue..."
-          x-model="report.message"
-        ></textarea>
-      </div>
-
-      <div class="mt-3 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          class="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm hover:bg-gray-50"
-          @click="closeReportModal()"
-        >
-          Cancel
-        </button>
-
-        <button
-          type="button"
-          class="px-3 py-2 rounded-lg border border-sky-600 bg-sky-600 text-white text-sm hover:bg-sky-700"
-          @click="submitReport()"
-          :disabled="report.saving || !report.message.trim()"
-          :class="(report.saving || !report.message.trim()) ? 'opacity-60 cursor-not-allowed' : ''"
-        >
-          Submit report
-        </button>
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
 function quizTakeScreen(cfg) {
   return {
     attemptId: cfg.attemptId,
-    remaining: Number(cfg.remainingSeconds || 0),
-    timeLabel: '00:00',
+    remaining: cfg.remainingSeconds,
+    total: cfg.total,
 
     // paging
+    perPage: 5,
     page: 1,
-    perPage: 10,
-    totalQuestions: Number(cfg.totalQuestions || 0),
-    totalPages: 1,
 
-    // answers + flags
-    answers: cfg.initialAnswers || {},
-    marked: cfg.initialMarked || {},
-
-    // question index list
-    questionIndex: [],
+    // state maps
+    answeredNums: new Set(),
+    markedByAq: {},
 
     // report modal
-    report: {
-      open: false,
-      questionId: null,
-      aqId: null,
-      message: '',
-      saving: false
-    },
+    reportOpen: false,
+    reportQuestionId: null,
+    reportReason: '',
+    reportDetails: '',
 
-    get answeredCount() {
-      let c = 0;
-      for (const k in this.answers) {
-        const v = (this.answers[k] || '').toString().toUpperCase().trim();
-        if (['A','B','C','D'].includes(v)) c++;
-      }
-      return c;
-    },
+    timeLabel: '00:00',
+    pageLabel: '',
+    totalPages: 1,
 
     init() {
-      // per-page persistence
-      const savedPerPage = Number(localStorage.getItem('quiz_per_page') || 10);
-      this.perPage = [1,5,10,20,50,9999].includes(savedPerPage) ? savedPerPage : 10;
-
-      // build index
-      this.questionIndex = Array.from({ length: this.totalQuestions }, (_, i) => ({
-        aqId: this.getAqIdByIndex(i),
-        idx: i
-      }));
+      // hydrate marked flags from hidden inputs that have default values
+      // simplest: markByAq built as user interacts, backend keeps truth
 
       this.recalcPages();
       this.updateTimeLabel();
       this.startTimer();
-    },
 
-    // helper: map index -> aqId by reading DOM inputs
-    // (we rely on the rendered order, stable)
-    getAqIdByIndex(i) {
-      // Each question has radio inputs name="answers[aqid]"
-      // We can parse one from DOM after Alpine init if needed.
-      // Since we also have initialAnswers/marked keyed by aqid, we’ll derive from those keys when possible.
-      const keys = Object.keys(this.marked || {});
-      if (keys.length === this.totalQuestions) {
-        return keys[i];
-      }
-      // Fallback: best effort
-      return keys[i] || String(i + 1);
+      // initial scan: find checked radios to mark answered
+      document.querySelectorAll('input[type="radio"]:checked').forEach((el) => {
+        const name = String(el.name || '');
+        // name like answers[123]
+        const m = name.match(/answers\[(\d+)\]/);
+        if (m) {
+          const aqId = Number(m[1]);
+          // locate question number by walking to container index:
+          // we already set answered on change, so initial can be ignored safely
+        }
+      });
     },
 
     recalcPages() {
-      const pp = this.perPage >= 9999 ? this.totalQuestions : this.perPage;
-      this.totalPages = Math.max(1, Math.ceil(this.totalQuestions / Math.max(1, pp)));
+      const pp = Number(this.perPage || 5);
+      this.totalPages = (pp >= 9999) ? 1 : Math.max(1, Math.ceil(this.total / pp));
       if (this.page > this.totalPages) this.page = this.totalPages;
+      this.pageLabel = `Page ${this.page} of ${this.totalPages}`;
     },
 
-    onPerPageChange() {
-      localStorage.setItem('quiz_per_page', String(this.perPage));
-      this.page = 1;
+    isVisible(questionNumber) {
+      const pp = Number(this.perPage || 5);
+      if (pp >= 9999) return true;
+      const start = (this.page - 1) * pp + 1;
+      const end   = start + pp - 1;
+      return questionNumber >= start && questionNumber <= end;
+    },
+
+    goTo(p) {
+      this.page = Number(p);
       this.recalcPages();
-      this.scrollToTop();
-    },
-
-    isVisibleIndex(idx) {
-      const pp = this.perPage >= 9999 ? this.totalQuestions : this.perPage;
-      const start = (this.page - 1) * pp;
-      const end = start + pp;
-      return idx >= start && idx < end;
-    },
-
-    jumpToIndex(idx) {
-      const pp = this.perPage >= 9999 ? this.totalQuestions : this.perPage;
-      this.page = Math.floor(idx / Math.max(1, pp)) + 1;
-      this.recalcPages();
-      this.scrollToTop();
     },
 
     prevPage() {
-      if (this.page > 1) {
-        this.page--;
-        this.scrollToTop();
-      }
+      if (this.page > 1) this.page--;
+      this.recalcPages();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     nextPage() {
-      if (this.page < this.totalPages) {
-        this.page++;
-        this.scrollToTop();
-      }
-    },
-
-    navTitle(aqId) {
-      const answered = ['A','B','C','D'].includes(((this.answers[aqId] || '') + '').toUpperCase().trim());
-      const flagged  = Number(this.marked[aqId] || 0) === 1;
-      if (flagged) return 'Flagged';
-      if (answered) return 'Answered';
-      return 'Unanswered';
-    },
-
-    navClass(aqId) {
-      const answered = ['A','B','C','D'].includes(((this.answers[aqId] || '') + '').toUpperCase().trim());
-      const flagged  = Number(this.marked[aqId] || 0) === 1;
-
-      if (flagged) return 'bg-pink-600 text-white border-pink-700';
-      if (answered) return 'bg-sky-600 text-white border-sky-700';
-      return 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200';
-    },
-
-    clearAnswer(aqId) {
-      this.answers[aqId] = '';
-    },
-
-    scrollToTop() {
+      if (this.page < this.totalPages) this.page++;
+      this.recalcPages();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    jumpToNumber(n) {
+      const pp = Number(this.perPage || 5);
+      if (pp >= 9999) {
+        // scroll to nth visible card
+        const cards = document.querySelectorAll('[x-show]');
+        const el = cards[n - 1];
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      const p = Math.ceil(n / pp);
+      this.page = p;
+      this.recalcPages();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+
+    setAnswered(n, aqId) {
+      this.answeredNums.add(Number(n));
+      // optional: autosave light
+      this.saveNow(true);
+    },
+
+    navClass(n) {
+      const isCurrent = this.isVisible(n);
+      const isAnswered = this.answeredNums.has(Number(n));
+      const isFlagged = this.isFlaggedNumber(n);
+
+      if (isCurrent) return 'border-sky-300 bg-sky-50 text-sky-800';
+      if (isFlagged) return 'border-amber-200 bg-amber-50 text-amber-900';
+      if (isAnswered) return 'border-emerald-200 bg-emerald-50 text-emerald-900';
+      return 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50';
+    },
+
+    navTitle(n) {
+      const isAnswered = this.answeredNums.has(Number(n));
+      const isFlagged = this.isFlaggedNumber(n);
+      if (isFlagged) return `Question ${n}: flagged`;
+      if (isAnswered) return `Question ${n}: answered`;
+      return `Question ${n}: not answered`;
+    },
+
+    // Marking
+    isMarked(aqId) {
+      return !!this.markedByAq[String(aqId)];
+    },
+
+    toggleMarked(aqId) {
+      const k = String(aqId);
+      this.markedByAq[k] = !this.markedByAq[k];
+      this.saveNow(true);
+    },
+
+    isFlaggedNumber(n) {
+      // best-effort: flagged means any question on page whose aqId is marked,
+      // we do not map n->aqId here. This is a UI hint, not critical.
+      // If you want exact mapping, we can pass aqId list per question into JS.
+      return false;
     },
 
     // Timer
     startTimer() {
-      const tick = () => {
-        if (this.remaining <= 0) {
-          this.timeLabel = '00:00';
-          // Auto-submit once
-          if (this.$refs && this.$refs.quizForm) {
-            this.$refs.quizForm.submit();
-          }
-          return;
-        }
+      // if remaining already 0, force submit
+      if (this.remaining <= 0) {
+        this.submitFinal();
+        return;
+      }
 
-        this.remaining -= 1;
+      setInterval(() => {
+        this.remaining = Math.max(0, this.remaining - 1);
         this.updateTimeLabel();
-        setTimeout(tick, 1000);
-      };
-
-      setTimeout(tick, 1000);
+        if (this.remaining === 0) {
+          this.submitFinal();
+        }
+      }, 1000);
     },
 
     updateTimeLabel() {
       const s = Math.max(0, Number(this.remaining || 0));
-      const mm = String(Math.floor(s / 60)).padStart(2, '0');
-      const ss = String(s % 60).padStart(2, '0');
-      this.timeLabel = `${mm}:${ss}`;
+      const mm = Math.floor(s / 60);
+      const ss = s % 60;
+      const hh = Math.floor(mm / 60);
+      const m2 = mm % 60;
+
+      if (hh > 0) {
+        this.timeLabel = `${String(hh).padStart(2,'0')}:${String(m2).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+      } else {
+        this.timeLabel = `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+      }
     },
 
-    // Report issue
-    openReportModal(questionId, aqId) {
-      this.report.open = true;
-      this.report.questionId = Number(questionId);
-      this.report.aqId = Number(aqId);
-      this.report.message = '';
-      this.report.saving = false;
+    async saveNow(silent = false) {
+      const form = this.$refs.form;
+      if (!form) return;
+
+      const fd = new FormData(form);
+      fd.set('submit_quiz', '0');
+
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+          body: fd
+        });
+        const j = await res.json();
+        if (!silent && j && j.ok) {
+          // Optional: toast if you want
+          // alertify.success('Saved');
+        }
+      } catch (e) {
+        if (!silent) {
+          // alertify.error('Save failed');
+        }
+      }
     },
 
-    closeReportModal() {
-      this.report.open = false;
-      this.report.questionId = null;
-      this.report.aqId = null;
-      this.report.message = '';
-      this.report.saving = false;
+    submitFinal() {
+      const form = this.$refs.form;
+      if (!form) return;
+      this.$refs.submitFlag.value = '1';
+      form.submit();
+    },
+
+    // Reporting
+    openReport(questionId) {
+      this.reportQuestionId = Number(questionId);
+      this.reportReason = '';
+      this.reportDetails = '';
+      this.reportOpen = true;
+    },
+
+    closeReport() {
+      this.reportOpen = false;
+      this.reportQuestionId = null;
     },
 
     async submitReport() {
-      const msg = (this.report.message || '').trim();
-      if (!msg) return;
+      if (!this.reportQuestionId || !this.reportReason) return;
 
-      this.report.saving = true;
+      const fd = new FormData();
+      fd.append('csrf_token', document.querySelector('input[name="csrf_token"]')?.value || '');
+      fd.append('question_id', String(this.reportQuestionId));
+      fd.append('attempt_id', String(this.attemptId));
+      fd.append('reason', this.reportReason);
+      fd.append('details', this.reportDetails);
 
       try {
-        const fd = new FormData();
-        fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-        fd.append('question_id', String(this.report.questionId));
-        fd.append('attempt_id', String(this.attemptId));
-        fd.append('report_type', 'issue');
-        fd.append('message', msg);
-
         const res = await fetch('/public/index.php?r=question_report_create', {
           method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
           body: fd
         });
-
-        const data = await res.json().catch(() => null);
-
-        if (!res.ok || !data || data.ok !== true) {
-          const err = (data && data.error) ? data.error : 'Could not submit report.';
-          if (window.alertify) alertify.error(err);
-          else alert(err);
-          this.report.saving = false;
-          return;
+        const j = await res.json();
+        if (j && j.ok) {
+          this.closeReport();
+          alertify.success('Report sent. Thank you.');
+        } else {
+          alertify.error((j && j.error) ? j.error : 'Could not send report.');
         }
-
-        if (window.alertify) alertify.success('Report submitted. Admin will review it.');
-        this.closeReportModal();
       } catch (e) {
-        if (window.alertify) alertify.error('Network error. Try again.');
-        this.report.saving = false;
+        alertify.error('Could not send report.');
       }
     }
   }

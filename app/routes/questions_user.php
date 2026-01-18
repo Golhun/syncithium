@@ -110,72 +110,212 @@ return [
     // ------------------------------------
     // Quiz take: show questions + timer
     // ------------------------------------
-    'quiz_take' => function (PDO $db, array $config): void {
-        $user      = require_login($db);
-        $attemptId = (int)($_GET['attempt_id'] ?? 0);
+'quiz_take' => function (PDO $db, array $config): void {
+    $user = require_login($db);
 
-        if ($attemptId <= 0) {
-            flash_set('error', 'Invalid quiz attempt.');
-            redirect('/public/index.php?r=quiz_start');
+    $attemptId = (int)($_GET['id'] ?? ($_POST['id'] ?? 0));
+    if ($attemptId <= 0) {
+        flash_set('error', 'Invalid attempt.');
+        redirect('/public/index.php');
+    }
+
+    $stmt = $db->prepare("SELECT * FROM attempts WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $attemptId]);
+    $attempt = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$attempt || (int)$attempt['user_id'] !== (int)$user['id']) {
+        flash_set('error', 'Attempt not found.');
+        redirect('/public/index.php');
+    }
+
+    if (($attempt['status'] ?? '') === 'submitted') {
+        redirect('/public/index.php?r=quiz_review&id=' . $attemptId);
+    }
+
+    // Remaining time
+    $timerSeconds = (int)$attempt['timer_seconds'];
+    $startedAt    = new DateTime((string)$attempt['started_at']);
+    $now          = new DateTime('now');
+    $elapsed      = $now->getTimestamp() - $startedAt->getTimestamp();
+    $remaining    = $timerSeconds - $elapsed;
+    if ($remaining < 0) $remaining = 0;
+
+    $wantsJson = (
+        (isset($_SERVER['HTTP_ACCEPT']) && str_contains((string)$_SERVER['HTTP_ACCEPT'], 'application/json')) ||
+        (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest')
+    );
+
+    // Auto-finalise if time over on GET
+    if ($remaining === 0 && ($attempt['status'] ?? '') === 'in_progress' && !is_post()) {
+        // Submit as if user clicked submit
+        $_POST['submit_quiz'] = '1';
+    }
+
+    if (is_post()) {
+        csrf_verify();
+
+        $answers = $_POST['answers'] ?? [];
+        if (!is_array($answers)) $answers = [];
+
+        $marked = $_POST['marked'] ?? [];
+        if (!is_array($marked)) $marked = [];
+
+        $submitQuiz = isset($_POST['submit_quiz']) && (string)$_POST['submit_quiz'] === '1';
+
+        $db->beginTransaction();
+        try {
+            $stmtUpdate = $db->prepare("
+                UPDATE attempt_questions
+                SET selected_option = :sel,
+                    marked_flag     = :marked,
+                    updated_at      = NOW()
+                WHERE id = :id AND attempt_id = :aid
+            ");
+
+            foreach ($answers as $aqid => $sel) {
+                $aqid = (int)$aqid;
+                if ($aqid <= 0) continue;
+
+                $opt = strtoupper(trim((string)$sel));
+                if (!in_array($opt, ['A','B','C','D'], true)) {
+                    $opt = null;
+                }
+
+                $isMarked = isset($marked[$aqid]) ? 1 : 0;
+
+                $stmtUpdate->execute([
+                    ':sel'    => $opt,
+                    ':marked' => $isMarked,
+                    ':id'     => $aqid,
+                    ':aid'    => $attemptId,
+                ]);
+            }
+
+            if ($submitQuiz) {
+                // Compute scores
+                $stats = ['correct'=>0, 'wrong'=>0, 'total'=>(int)$attempt['total_questions'], 'score'=>0];
+
+                $stmtQ = $db->prepare("
+                    SELECT aq.id, aq.selected_option, q.correct_option
+                    FROM attempt_questions aq
+                    JOIN questions q ON q.id = aq.question_id
+                    WHERE aq.attempt_id = :aid
+                    ORDER BY aq.position ASC
+                ");
+                $stmtQ->execute([':aid' => $attemptId]);
+                $rows = $stmtQ->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+                $updateQ = $db->prepare("
+                    UPDATE attempt_questions
+                    SET is_correct = :is_correct,
+                        updated_at = NOW()
+                    WHERE id = :id
+                ");
+
+                foreach ($rows as $row) {
+                    $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
+                    if (!in_array($sel, ['A','B','C','D'], true)) $sel = null;
+
+                    $isCorrect = null;
+                    if ($sel !== null) {
+                        $isCorrect = ($sel === strtoupper((string)$row['correct_option'])) ? 1 : 0;
+                    }
+
+                    if ($isCorrect === 1) $stats['correct']++;
+                    elseif ($isCorrect === 0) $stats['wrong']++;
+
+                    $updateQ->execute([
+                        ':is_correct' => $isCorrect,
+                        ':id'         => (int)$row['id'],
+                    ]);
+                }
+
+                $stats['score'] = ($attempt['scoring_mode'] === 'negative')
+                    ? ($stats['correct'] - $stats['wrong'])
+                    : $stats['correct'];
+
+                $stmtU = $db->prepare("
+                    UPDATE attempts
+                    SET status = 'submitted',
+                        submitted_at = NOW(),
+                        raw_correct = :c,
+                        raw_wrong   = :w,
+                        score       = :s,
+                        updated_at  = NOW()
+                    WHERE id = :id
+                ");
+                $stmtU->execute([
+                    ':c'  => $stats['correct'],
+                    ':w'  => $stats['wrong'],
+                    ':s'  => $stats['score'],
+                    ':id' => $attemptId,
+                ]);
+            }
+
+            $db->commit();
+
+            if ($wantsJson) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok' => true,
+                    'submitted' => $submitQuiz,
+                    'remaining' => $remaining,
+                ]);
+                return;
+            }
+
+            if ($submitQuiz) {
+                redirect('/public/index.php?r=quiz_review&id=' . $attemptId);
+            } else {
+                flash_set('success', 'Saved.');
+                redirect('/public/index.php?r=quiz_take&id=' . $attemptId);
+            }
+        } catch (Throwable $e) {
+            $db->rollBack();
+
+            if ($wantsJson) {
+                http_response_code(500);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok'=>false, 'error'=>$e->getMessage()]);
+                return;
+            }
+
+            flash_set('error', 'Could not save quiz: ' . $e->getMessage());
+            redirect('/public/index.php?r=quiz_take&id=' . $attemptId);
         }
+    }
 
-        $stmt = $db->prepare("
-            SELECT * FROM attempts
-            WHERE id = :id AND user_id = :uid
-            LIMIT 1
-        ");
-        $stmt->execute([
-            ':id'  => $attemptId,
-            ':uid' => (int)$user['id'],
-        ]);
-        $attempt = $stmt->fetch();
+    // GET: load questions
+    $stmt = $db->prepare("
+        SELECT
+          aq.id AS aq_id,
+          aq.selected_option,
+          aq.marked_flag,
+          q.id   AS question_id,
+          q.question_text,
+          q.option_a,
+          q.option_b,
+          q.option_c,
+          q.option_d,
+          q.correct_option,
+          t.name AS topic_name
+        FROM attempt_questions aq
+        JOIN questions q ON q.id = aq.question_id
+        JOIN topics   t  ON t.id = q.topic_id
+        WHERE aq.attempt_id = :aid
+        ORDER BY aq.position ASC
+    ");
+    $stmt->execute([':aid' => $attemptId]);
+    $questions = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-        if (!$attempt) {
-            flash_set('error', 'Quiz attempt not found.');
-            redirect('/public/index.php?r=quiz_start');
-        }
+    render('quiz/take', [
+        'title'            => 'Take Quiz',
+        'attempt'          => $attempt,
+        'questions'        => $questions,
+        'remainingSeconds' => $remaining,
+    ]);
+},
 
-        if (!empty($attempt['submitted_at'])) {
-            redirect('/public/index.php?r=quiz_result&attempt_id=' . $attemptId);
-        }
-
-        // Timer logic (server side)
-        $started   = strtotime((string)$attempt['started_at']);
-        $elapsed   = max(0, time() - $started);
-        $remaining = max(0, (int)$attempt['timer_seconds'] - $elapsed);
-
-        if ($remaining <= 0) {
-            // Time is over, force submission
-            redirect('/public/index.php?r=quiz_submit&attempt_id=' . $attemptId);
-        }
-
-        // Load questions for this attempt
-        $stmt = $db->prepare("
-            SELECT
-              aq.id AS aq_id,
-              aq.selected_option,
-              aq.marked_flag,
-              q.id AS question_id,
-              q.question_text,
-              q.option_a,
-              q.option_b,
-              q.option_c,
-              q.option_d
-            FROM attempt_questions aq
-            JOIN questions q ON q.id = aq.question_id
-            WHERE aq.attempt_id = :aid
-            ORDER BY aq.id
-        ");
-        $stmt->execute([':aid' => $attemptId]);
-        $attemptQuestions = $stmt->fetchAll() ?: [];
-
-        render('user/quiz_take', [
-            'title'            => 'Quiz in progress',
-            'attempt'          => $attempt,
-            'attemptQuestions' => $attemptQuestions,
-            'remainingSeconds' => $remaining,
-        ]);
-    },
 
     // ------------------------------------
     // Quiz submit (manual or auto)
@@ -497,6 +637,67 @@ return [
     ]);
 },
 
+'question_report_create' => function (PDO $db, array $config): void {
+    $user = require_login($db);
+
+    if (!is_post()) {
+        redirect('/public/index.php');
+    }
+
+    csrf_verify();
+
+    $questionId = (int)($_POST['question_id'] ?? 0);
+    $attemptId  = (int)($_POST['attempt_id'] ?? 0);
+    $reason     = trim((string)($_POST['reason'] ?? ''));
+    $details    = trim((string)($_POST['details'] ?? ''));
+
+    $wantsJson = (
+        (isset($_SERVER['HTTP_ACCEPT']) && str_contains((string)$_SERVER['HTTP_ACCEPT'], 'application/json')) ||
+        (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest')
+    );
+
+    if ($questionId <= 0 || $reason === '') {
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>false, 'error'=>'Invalid report.']);
+            return;
+        }
+        flash_set('error', 'Invalid report.');
+        redirect('/public/index.php');
+    }
+
+    try {
+        $stmt = $db->prepare("
+            INSERT INTO question_reports (user_id, attempt_id, question_id, reason, details, status, created_at, updated_at)
+            VALUES (:uid, :aid, :qid, :reason, :details, 'pending', NOW(), NOW())
+        ");
+        $stmt->execute([
+            ':uid' => (int)$user['id'],
+            ':aid' => $attemptId > 0 ? $attemptId : null,
+            ':qid' => $questionId,
+            ':reason' => $reason,
+            ':details' => $details !== '' ? $details : null,
+        ]);
+
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>true]);
+            return;
+        }
+
+        flash_set('success', 'Report sent. Thank you.');
+        redirect('/public/index.php');
+    } catch (Throwable $e) {
+        if ($wantsJson) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>false, 'error'=>'Could not submit report.']);
+            return;
+        }
+        flash_set('error', 'Could not submit report.');
+        redirect('/public/index.php');
+    }
+},
 
 
 

@@ -194,9 +194,10 @@ $percent = $total > 0 ? round(($correct / $total) * 100) : 0;
   </div>
 
   <div class="mt-4">
-    <a href="/public/index.php?r=quiz_start"
-       class="inline-flex items-center px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm">
-      Take another quiz
-    </a>
+<a href="/public/index.php?r=taxonomy_selector"
+   class="px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">
+  Take Another Quiz
+</a>
+
   </div>
 </div>
