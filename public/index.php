@@ -14,6 +14,7 @@ $routes = array_merge(
     require __DIR__ . '/../app/routes/admin_users.php',
     require __DIR__ . '/../app/routes/questions_admin.php',
     require __DIR__ . '/../app/routes/taxonomy_admin.php',
+    require __DIR__ . '/../app/routes/api_auth.php',
 
 );
 
