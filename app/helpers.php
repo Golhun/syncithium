@@ -74,6 +74,7 @@ function render(string $view, array $data = []): void
     if (!is_file($view_file)) {
         http_response_code(500);
         echo 'View not found: ' . htmlspecialchars($view);
+        echo 'Resolved path: ' . htmlspecialchars($view_file);
         return;
     }
 
