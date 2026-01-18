@@ -8,6 +8,7 @@ function init_session(array $config): void {
   ini_set('session.use_only_cookies', '1');
 
   $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+
   session_name($name);
   session_set_cookie_params([
     'lifetime' => 0,
@@ -28,8 +29,9 @@ function current_user(PDO $db): ?array {
   if (!$uid) return null;
 
   $stmt = $db->prepare("SELECT id, email, role, must_change_password, disabled_at FROM users WHERE id = :id LIMIT 1");
-  $stmt->execute([':id' => $uid]);
-  $u = $stmt->fetch();
+  $stmt->execute([':id' => (int)$uid]);
+  $u = $stmt->fetch(PDO::FETCH_ASSOC);
+
   if (!$u) return null;
 
   // If user was disabled mid-session, treat as logged out
@@ -56,7 +58,6 @@ function require_admin(PDO $db): array {
   return $u;
 }
 
-
 function attempt_login(PDO $db, string $email, string $password, array $config): bool {
   $email = strtolower(trim($email));
 
@@ -68,7 +69,8 @@ function attempt_login(PDO $db, string $email, string $password, array $config):
     LIMIT 1
   ");
   $stmt->execute([':email' => $email]);
-  $u = $stmt->fetch();
+  $u = $stmt->fetch(PDO::FETCH_ASSOC);
+
   if (!$u) return false;
 
   // Do not leak disabled or lockout details to the UI
@@ -96,13 +98,19 @@ function attempt_login(PDO $db, string $email, string $password, array $config):
   return true;
 }
 
-function logout(): void {
+function logout(array $config = []): void {
+  // Clear session array
   $_SESSION = [];
+
+  // Expire session cookie
   if (session_status() === PHP_SESSION_ACTIVE) {
+    $params = session_get_cookie_params();
+    $cookieName = session_name();
+
+    setcookie($cookieName, '', time() - 3600, $params['path'] ?? '/', $params['domain'] ?? '', (bool)($params['secure'] ?? false), true);
     session_destroy();
   }
 }
-
 
 function is_locked_out(array $u): bool {
   if (empty($u['lockout_until'])) return false;
@@ -130,7 +138,7 @@ function register_failed_login(PDO $db, int $userId, ?string $lastFailedAt, int 
 
   if ($failedAttempts >= $maxAttempts) {
     $lockoutUntil = date('Y-m-d H:i:s', $now + ($lockMin * 60));
-    $newFailedAttempts = 0; // reset after lock to avoid permanent growth
+    $newFailedAttempts = 0;
   }
 
   $stmt = $db->prepare("
