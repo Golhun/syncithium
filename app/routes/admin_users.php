@@ -402,4 +402,104 @@ return [
       redirect('/public/index.php?r=admin_reset_requests');
   },
 
+  'admin_question_reports' => function (PDO $db, array $config): void {
+    $user = require_login($db);
+    if (($user['role'] ?? 'user') !== 'admin') {
+        flash_set('error', 'Access denied.');
+        redirect('/public/index.php');
+    }
+
+    $status = (string)($_GET['status'] ?? 'open');
+    if (!in_array($status, ['open','in_review','resolved','rejected','all'], true)) {
+        $status = 'open';
+    }
+
+    if ($status === 'all') {
+        $stmt = $db->query("
+            SELECT r.*, u.email, q.question_text
+            FROM question_reports r
+            JOIN users u ON u.id = r.user_id
+            LEFT JOIN questions q ON q.id = r.question_id
+            ORDER BY r.created_at DESC
+            LIMIT 500
+        ");
+        $rows = $stmt->fetchAll() ?: [];
+    } else {
+        $stmt = $db->prepare("
+            SELECT r.*, u.email, q.question_text
+            FROM question_reports r
+            JOIN users u ON u.id = r.user_id
+            LEFT JOIN questions q ON q.id = r.question_id
+            WHERE r.status = :s
+            ORDER BY r.created_at DESC
+            LIMIT 500
+        ");
+        $stmt->execute([':s' => $status]);
+        $rows = $stmt->fetchAll() ?: [];
+    }
+
+    render('admin/question_reports', [
+        'title' => 'Question Reports',
+        'user' => $user,
+        'status' => $status,
+        'reports' => $rows,
+    ]);
+},
+
+'admin_question_report_update' => function (PDO $db, array $config): void {
+    $user = require_login($db);
+    if (($user['role'] ?? 'user') !== 'admin') {
+        flash_set('error', 'Access denied.');
+        redirect('/public/index.php');
+    }
+
+    if (!is_post()) {
+        redirect('/public/index.php?r=admin_question_reports');
+    }
+
+    csrf_verify();
+
+    $id = (int)($_POST['id'] ?? 0);
+    $status = (string)($_POST['status'] ?? 'in_review');
+    $notes = trim((string)($_POST['admin_notes'] ?? ''));
+
+    if ($id <= 0) {
+        flash_set('error', 'Invalid report.');
+        redirect('/public/index.php?r=admin_question_reports');
+    }
+
+    if (!in_array($status, ['open','in_review','resolved','rejected'], true)) {
+        $status = 'in_review';
+    }
+
+    $resolvedAt = null;
+    $resolvedBy = null;
+    if (in_array($status, ['resolved','rejected'], true)) {
+        $resolvedAt = date('Y-m-d H:i:s');
+        $resolvedBy = (int)$user['id'];
+    }
+
+    $stmt = $db->prepare("
+        UPDATE question_reports
+        SET status = :s,
+            admin_notes = :n,
+            resolved_by = :rb,
+            resolved_at = :ra,
+            updated_at = NOW()
+        WHERE id = :id
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':s'  => $status,
+        ':n'  => ($notes !== '' ? $notes : null),
+        ':rb' => $resolvedBy,
+        ':ra' => $resolvedAt,
+        ':id' => $id,
+    ]);
+
+    flash_set('success', 'Report updated.');
+    redirect('/public/index.php?r=admin_question_reports');
+},
+
+
 ];
