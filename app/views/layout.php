@@ -74,23 +74,17 @@ $flash = function_exists('flash_take') ? flash_take() : null;
                         Start quiz
                     </a>
                 <?php else: ?>
-                    <!-- Normal user: topic chooser -->
-                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=taxonomy_selector">
-                        Choose topics
-                    </a>
+    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+       href="/public/index.php?r=quiz_start">
+        Start quiz
+    </a>
+<?php endif; ?>
 
-                    <!-- NEW: normal user quiz entry -->
-                    <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=quiz_start">
-                        Start quiz
-                    </a>
-                <?php endif; ?>
+<a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
+   href="/public/index.php?r=logout">
+    Sign out
+</a>
 
-                <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                   href="/public/index.php?r=logout">
-                    Sign out
-                </a>
             </nav>
         <?php endif; ?>
     </div>

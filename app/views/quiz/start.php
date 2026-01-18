@@ -8,23 +8,19 @@
   x-data="quizStart({
     presetLevelId: <?= $presetLevelId ? (int)$presetLevelId : 'null' ?>,
     presetModuleId: <?= $presetModuleId ? (int)$presetModuleId : 'null' ?>
-
   })"
   x-init="init()"
 >
+  <!-- Page header -->
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-xl font-semibold">Start Quiz</h1>
       <p class="text-xs text-gray-600 mt-1">
-        Choose your scope, pick topics, set the number of questions and timer, then start.
+        Select your scope, pick topics, then choose number of questions, scoring mode and timer.
       </p>
     </div>
 
     <div class="space-x-2 text-xs">
-      <a href="/public/index.php"
-         class="px-3 py-1 rounded-lg border border-gray-200 hover:bg-gray-50">
-        Home
-      </a>
       <a href="/public/index.php?r=quiz_start&preset=gem201"
          class="px-3 py-1 rounded-lg border border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100">
         Level 200 · GEM 201 preset
@@ -34,23 +30,24 @@
 
   <div class="p-4 rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-700">
     <p>
-      <span class="font-semibold">Tip:</span> You must select at least one topic under a subject.
-      Level / Module / Subject alone is not enough.
+      <span class="font-semibold">Note:</span>
+      You must select at least one topic. Questions are drawn randomly across the selected topics.
     </p>
   </div>
 
-  <form method="post" class="space-y-4">
+  <form method="post" action="/public/index.php?r=quiz_start" class="space-y-4">
     <?= csrf_field() ?>
 
     <!-- Taxonomy selection -->
-    <div class="p-4 rounded-xl border border-gray-200 space-y-3">
+    <div class="p-4 rounded-xl border border-gray-200 space-y-3 bg-white">
       <div class="flex items-center justify-between">
-        <div class="font-medium text-sm">Select scope</div>
+        <div class="font-medium text-sm">Scope</div>
         <div class="text-xs text-gray-500">
           Level → Module → Subject → Topics
         </div>
       </div>
 
+      <!-- Level / Module / Subject -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
         <!-- Level -->
         <div>
@@ -117,6 +114,7 @@
               <input
                 type="checkbox"
                 class="rounded border-gray-300"
+                name="topic_ids[]"
                 :value="t.id"
                 x-model="selectedTopicIds"
               >
@@ -125,13 +123,8 @@
           </template>
         </div>
 
-        <!-- Hidden inputs reflecting selected topics -->
-        <template x-for="tid in selectedTopicIds" :key="'sel-'+tid">
-          <input type="hidden" name="topic_ids[]" :value="tid">
-        </template>
-
         <p class="mt-1 text-xs text-gray-500">
-          You can pick multiple topics from the selected subject. Questions will be randomly drawn across all selected topics.
+          You can choose one or many topics. We will randomly draw questions across the selected topics.
         </p>
       </div>
     </div>
@@ -148,7 +141,7 @@
           x-model="numQuestions"
           class="w-full px-3 py-2 rounded-lg border border-gray-200"
         >
-        <p class="text-xs text-gray-500 mt-1">Recommended: 20–50 questions per sitting.</p>
+        <p class="text-xs text-gray-500 mt-1">Recommended: 20–50 per sitting.</p>
       </div>
 
       <div>
@@ -176,7 +169,7 @@
           <option value="5400">90 minutes</option>
         </select>
         <p class="text-xs text-gray-500 mt-1">
-          Quiz will auto-submit when the timer ends.
+          Quiz will auto-submit automatically when the timer ends.
         </p>
       </div>
     </div>
@@ -204,7 +197,7 @@ function quizStart(config) {
     moduleId: config.presetModuleId || '',
     subjectId: '',
 
-    // Alpine will keep this array in sync with the checkboxes
+    // Alpine keeps this array in sync with the checkboxes.
     selectedTopicIds: [],
 
     numQuestions: 20,
@@ -216,7 +209,7 @@ function quizStart(config) {
         const res = await fetch('/public/index.php?r=api_levels');
         this.levels = await res.json();
 
-        // If preset, auto-load modules / subjects chain
+        // If we came in via preset, auto-load chain.
         if (this.levelId) {
           await this.loadModules();
           if (this.moduleId) {
