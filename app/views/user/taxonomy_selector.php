@@ -11,140 +11,230 @@
   })"
   x-init="init()"
 >
-  <!-- Header -->
-  <div class="flex items-center justify-between mb-6">
-    <div>
-      <h1 class="text-2xl font-semibold">Start Quiz</h1>
-      <p class="text-xs text-gray-500 mt-1">
-        Choose level, module, subject and topics, then set number of questions, scoring mode and timer.
+  <!-- Page header -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+    <div class="min-w-0">
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl font-semibold">Start Quiz</h1>
+        <span class="inline-flex items-center px-2 py-1 text-xs rounded-lg ring-1 ring-gray-200 bg-white text-gray-700">
+          Setup
+        </span>
+      </div>
+      <p class="text-sm text-gray-600 mt-1">
+        Choose your scope, select topics, then set questions, scoring, and timer.
       </p>
     </div>
 
-    <div class="space-x-2 text-sm">
-      <a href="/public/index.php?r=taxonomy_selector&preset=gem201"
-         class="px-3 py-1 rounded-full border border-sky-300 bg-sky-50 text-sky-700">
-        Level 200 · GEM 201 preset
+    <div class="flex items-center gap-2 flex-wrap justify-start md:justify-end">
+      <a
+        href="/public/index.php?r=taxonomy_selector&preset=gem201"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
+        title="Load a preset selection"
+      >
+        <span class="inline-flex h-2 w-2 rounded-full bg-sky-500"></span>
+        <span>Load preset</span>
+        <span class="px-2 py-1 rounded-lg bg-sky-50 text-sky-700 text-xs border border-sky-200">
+          Level 200, GEM 201
+        </span>
       </a>
     </div>
   </div>
 
-  <!-- Info note -->
-  <div class="mb-4 p-4 rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-600">
-    <strong class="font-medium">Note:</strong>
-    You must select at least one topic. Questions are drawn randomly across the selected topics.
+  <!-- Progress / guidance row -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+    <div class="rounded-2xl border border-gray-200 bg-white p-4">
+      <div class="text-xs text-gray-500">Step 1</div>
+      <div class="font-semibold mt-1">Pick scope</div>
+      <div class="text-xs text-gray-500 mt-1">Level → Module → Subject</div>
+    </div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-4">
+      <div class="text-xs text-gray-500">Step 2</div>
+      <div class="font-semibold mt-1">Select topics</div>
+      <div class="text-xs text-gray-500 mt-1">Choose one or many</div>
+    </div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-4">
+      <div class="text-xs text-gray-500">Step 3</div>
+      <div class="font-semibold mt-1">Start quiz</div>
+      <div class="text-xs text-gray-500 mt-1">Questions, scoring, timer</div>
+    </div>
   </div>
 
-  <!-- API error (optional display) -->
+  <!-- API error -->
   <template x-if="apiError">
-    <div class="mb-4 p-3 rounded-xl border border-red-200 bg-red-50 text-xs text-red-700">
-      <strong>Error:</strong> <span x-text="apiError"></span>
+    <div class="mb-5 p-4 rounded-2xl border border-rose-200 bg-rose-50 text-sm text-rose-800">
+      <div class="font-semibold">Could not load quiz data</div>
+      <div class="mt-1" x-text="apiError"></div>
+      <div class="mt-2 text-xs text-rose-700">
+        If this persists, confirm you are logged in and the API routes return JSON.
+      </div>
     </div>
   </template>
 
   <!-- Single quiz-start form -->
-  <form method="post" action="/public/index.php?r=quiz_start" class="space-y-4">
+  <form method="post" action="/public/index.php?r=quiz_start" class="space-y-5">
     <?= csrf_field() ?>
 
-    <!-- Scope -->
-    <div class="p-4 rounded-xl border border-gray-200 bg-white space-y-3">
-      <div class="flex items-center justify-between text-xs mb-1">
-        <span class="font-medium">Scope</span>
-        <span class="text-gray-400">Level → Module → Subject → Topics</span>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <!-- Level -->
-        <div>
-          <label class="block text-xs font-medium mb-1">Level</label>
-          <select
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm"
-            x-model="levelId"
-            @change="onLevelChange"
-          >
-            <option value="">Select level</option>
-            <template x-for="l in levels" :key="l.id">
-              <option :value="l.id" x-text="l.label"></option>
-            </template>
-          </select>
-        </div>
-
-        <!-- Module -->
-        <div>
-          <label class="block text-xs font-medium mb-1">Module</label>
-          <select
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm"
-            x-model="moduleId"
-            @change="onModuleChange"
-            :disabled="!levelId"
-          >
-            <option value="">Select module</option>
-            <template x-for="m in modules" :key="m.id">
-              <option :value="m.id" x-text="m.label"></option>
-            </template>
-          </select>
-        </div>
-
-        <!-- Subject -->
-        <div>
-          <label class="block text-xs font-medium mb-1">Subject</label>
-          <select
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm"
-            x-model="subjectId"
-            @change="onSubjectChange"
-            :disabled="!moduleId"
-          >
-            <option value="">Select subject</option>
-            <template x-for="s in subjects" :key="s.id">
-              <option :value="s.id" x-text="s.label"></option>
-            </template>
-          </select>
+    <!-- Scope card -->
+    <section class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-sm font-semibold">Scope</div>
+            <div class="text-xs text-gray-500 mt-1">Select Level, Module, then Subject to load topics.</div>
+          </div>
+          <div class="text-xs text-gray-500 whitespace-nowrap">
+            Step 1 of 3
+          </div>
         </div>
       </div>
 
-      <!-- Topics as pills -->
-      <div class="mt-4">
-        <div class="flex items-center justify-between mb-2 text-xs">
-          <span class="font-medium">Topics (multi select)</span>
-          <span class="text-gray-500" x-text="'Selected: ' + selectedTopicIds.length"></span>
+      <div class="p-5">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Level -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Level</label>
+            <select
+              class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
+              x-model="levelId"
+              @change="onLevelChange"
+            >
+              <option value="">Select level</option>
+              <template x-for="l in levels" :key="l.id">
+                <option :value="l.id" x-text="l.label"></option>
+              </template>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">Pick the academic level.</p>
+          </div>
+
+          <!-- Module -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Module</label>
+            <select
+              class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
+              x-model="moduleId"
+              @change="onModuleChange"
+              :disabled="!levelId"
+            >
+              <option value="">Select module</option>
+              <template x-for="m in modules" :key="m.id">
+                <option :value="m.id" x-text="m.label"></option>
+              </template>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">Modules depend on Level.</p>
+          </div>
+
+          <!-- Subject -->
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Subject</label>
+            <select
+              class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
+              x-model="subjectId"
+              @change="onSubjectChange"
+              :disabled="!moduleId"
+            >
+              <option value="">Select subject</option>
+              <template x-for="s in subjects" :key="s.id">
+                <option :value="s.id" x-text="s.label"></option>
+              </template>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">Subjects depend on Module.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Topics card -->
+    <section class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-sm font-semibold">Topics</div>
+            <div class="text-xs text-gray-500 mt-1">Select one or many topics. Questions are drawn randomly across them.</div>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs whitespace-nowrap">
+            <span class="inline-flex items-center px-2 py-1 rounded-lg ring-1 ring-gray-200 bg-white text-gray-700">
+              Selected:
+              <span class="ml-1 font-semibold" x-text="selectedTopicIds.length"></span>
+            </span>
+            <span class="text-gray-400">Step 2 of 3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <!-- Search + bulk actions -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Search topics</label>
+            <input
+              type="text"
+              x-model="topicSearch"
+              class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
+              placeholder="Type to filter topics..."
+              :disabled="!subjectId"
+            >
+            <p class="mt-1 text-xs text-gray-500">Tip: search by keyword, for example “bone”, “cardio”, “renal”.</p>
+          </div>
+
+          <div class="flex md:items-end gap-2">
+            <button
+              type="button"
+              class="w-full md:w-auto px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
+              @click="selectedTopicIds = []"
+              :disabled="selectedTopicIds.length === 0"
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              class="w-full md:w-auto px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
+              @click="
+                (() => {
+                  const ids = filteredTopics().map(t => Number(t.id));
+                  const merged = Array.from(new Set([...selectedTopicIds, ...ids]));
+                  selectedTopicIds = merged;
+                })()
+              "
+              :disabled="!subjectId || filteredTopics().length === 0"
+              title="Adds all currently filtered topics to your selection"
+            >
+              Select all filtered
+            </button>
+          </div>
         </div>
 
-        <!-- Topic search -->
-        <div class="mb-3">
-          <input
-            type="text"
-            x-model="topicSearch"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-xs"
-            placeholder="Search topic..."
-            :disabled="!subjectId"
-          >
-        </div>
-
-        <!-- Pills -->
-        <div class="border border-gray-200 rounded-xl bg-white px-3 py-3 min-h-[56px]">
-          <!-- EMPTY / NOTE -->
-          <template x-if="filteredTopics().length === 0">
-            <p class="text-xs text-gray-500">
-              <span x-show="!subjectId">Select a subject to load topics.</span>
-              <span x-show="subjectId">No topics match your search.</span>
-            </p>
+        <!-- Topics list -->
+        <div class="rounded-2xl border border-gray-200 bg-white p-4">
+          <template x-if="!subjectId">
+            <div class="text-sm text-gray-600">
+              Select a subject to load topics.
+            </div>
           </template>
 
-          <!-- LIST -->
-          <div class="flex flex-wrap gap-2" x-show="filteredTopics().length > 0">
+          <template x-if="subjectId && filteredTopics().length === 0">
+            <div class="text-sm text-gray-600">
+              No topics match your search.
+            </div>
+          </template>
+
+          <div class="flex flex-wrap gap-2" x-show="subjectId && filteredTopics().length > 0">
             <template x-for="t in filteredTopics()" :key="t.id">
               <button
                 type="button"
                 @click.prevent="toggleTopic(t.id)"
-                class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium focus:outline-none"
+                class="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold border transition focus:outline-none focus:ring-4 focus:ring-sky-100"
                 :class="isSelected(t.id)
-                  ? 'bg-pink-500 text-white'
-                  : 'bg-blue-500 text-white'"
+                  ? 'bg-sky-600 border-sky-600 text-white'
+                  : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'"
               >
-                <span x-text="t.label"></span>
-                <span class="ml-1 text-[11px] font-semibold">
-                  <span x-show="isSelected(t.id)">✓</span>
-                  <span x-show="!isSelected(t.id)">+</span>
-                </span>
+                <span class="truncate max-w-[220px]" x-text="t.label"></span>
+                <span
+                  class="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold"
+                  :class="isSelected(t.id) ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'"
+                  x-text="isSelected(t.id) ? '✓' : '+'"
+                ></span>
               </button>
             </template>
           </div>
@@ -155,78 +245,89 @@
           <input type="hidden" name="topic_ids[]" :value="tid">
         </template>
 
-        <div class="flex items-center justify-between mt-2 text-xs text-gray-500">
-          <span>You can choose one or many topics. We will randomly draw questions across them.</span>
-          <button type="button"
-                  class="px-2 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
-                  @click="selectedTopicIds = []"
-                  x-show="selectedTopicIds.length > 0">
-            Clear selection
-          </button>
+        <div class="text-xs text-gray-500">
+          You must select at least one topic before you can start.
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Quiz options -->
-    <div class="p-4 rounded-xl border border-gray-200 bg-white grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-      <div>
-        <label class="block text-xs font-medium mb-1">Number of questions</label>
-        <input
-          type="number"
-          name="num_questions"
-          min="1"
-          max="200"
-          x-model="numQuestions"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300"
-        >
-        <p class="mt-1 text-xs text-gray-500">Recommended: 20–50 per sitting.</p>
+    <!-- Options card -->
+    <section class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-sm font-semibold">Quiz options</div>
+            <div class="text-xs text-gray-500 mt-1">Set number of questions, scoring mode, and timer.</div>
+          </div>
+          <div class="text-xs text-gray-500 whitespace-nowrap">Step 3 of 3</div>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-medium mb-1">Scoring mode</label>
-        <select
-          name="scoring_mode"
-          x-model="scoringMode"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300"
-        >
-          <option value="standard">Standard (+1 correct, 0 wrong)</option>
-          <option value="negative">Negative marking (+1 correct, -1 wrong)</option>
-        </select>
+      <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Number of questions</label>
+          <input
+            type="number"
+            name="num_questions"
+            min="1"
+            max="200"
+            x-model="numQuestions"
+            class="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
+          >
+          <p class="mt-1 text-xs text-gray-500">Recommended: 20 to 50 per sitting.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Scoring mode</label>
+          <select
+            name="scoring_mode"
+            x-model="scoringMode"
+            class="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
+          >
+            <option value="standard">Standard, +1 correct, 0 wrong</option>
+            <option value="negative">Negative marking, +1 correct, -1 wrong</option>
+          </select>
+          <p class="mt-1 text-xs text-gray-500">Negative marking increases difficulty.</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Timer</label>
+          <select
+            name="timer_seconds"
+            x-model="timerSeconds"
+            class="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
+          >
+            <option value="1800">30 minutes</option>
+            <option value="2700">45 minutes</option>
+            <option value="3600">60 minutes</option>
+            <option value="5400">90 minutes</option>
+          </select>
+          <p class="mt-1 text-xs text-gray-500">Auto-submits when time ends.</p>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-xs font-medium mb-1">Timer</label>
-        <select
-          name="timer_seconds"
-          x-model="timerSeconds"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300"
-        >
-          <option value="1800">30 minutes</option>
-          <option value="2700">45 minutes</option>
-          <option value="3600">60 minutes</option>
-          <option value="5400">90 minutes</option>
-        </select>
-        <p class="mt-1 text-xs text-gray-500">
-          Quiz will auto-submit automatically when the timer ends.
-        </p>
-      </div>
-    </div>
+      <!-- Action footer -->
+      <div class="px-5 py-4 border-t border-gray-200 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="text-xs text-gray-500">
+          <span class="font-semibold text-gray-700" x-text="selectedTopicIds.length"></span>
+          <span> topic(s) selected.</span>
+        </div>
 
-    <!-- Action -->
-    <div class="flex justify-end">
-      <button
-        type="submit"
-        name="start_quiz"
-        value="1"
-        :disabled="selectedTopicIds.length === 0"
-        class="px-4 py-2 rounded-lg text-sm text-white border border-sky-600"
-        :class="selectedTopicIds.length === 0
-          ? 'bg-sky-300 cursor-not-allowed'
-          : 'bg-sky-600 hover:bg-sky-700 cursor-pointer'"
-      >
-        Start quiz
-      </button>
-    </div>
+        <button
+          type="submit"
+          name="start_quiz"
+          value="1"
+          :disabled="selectedTopicIds.length === 0"
+          class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white border border-sky-600 transition"
+          :class="selectedTopicIds.length === 0
+            ? 'bg-sky-300 cursor-not-allowed'
+            : 'bg-sky-600 hover:bg-sky-700'"
+        >
+          <span>Start quiz</span>
+          <span class="inline-flex h-2 w-2 rounded-full bg-white/80"></span>
+        </button>
+      </div>
+    </section>
   </form>
 </div>
 

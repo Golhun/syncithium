@@ -425,17 +425,22 @@ return [
         ");
         $rows = $stmt->fetchAll() ?: [];
     } else {
-        $stmt = $db->prepare("
-            SELECT r.*, u.email, q.question_text
-            FROM question_reports r
-            JOIN users u ON u.id = r.user_id
-            LEFT JOIN questions q ON q.id = r.question_id
-            WHERE r.status = :s
-            ORDER BY r.created_at DESC
-            LIMIT 500
-        ");
-        $stmt->execute([':s' => $status]);
-        $rows = $stmt->fetchAll() ?: [];
+$stmt = $db->prepare("
+  SELECT
+    r.*,
+    u.email,
+    q.question_text,
+    r.report_type AS reason,
+    r.message     AS details
+  FROM question_reports r
+  JOIN users u ON u.id = r.user_id
+  LEFT JOIN questions q ON q.id = r.question_id
+  WHERE r.status = :s
+  ORDER BY r.created_at DESC
+  LIMIT 500
+");
+$stmt->execute([':s' => $status]);
+$rows = $stmt->fetchAll() ?: [];
     }
 
     render('admin/question_reports', [
