@@ -14,8 +14,24 @@ try {
     $u = null;
 }
 
-// Flash message
-$flash = function_exists('flash_take') ? flash_take() : null;
+// Flash messages (may be a single assoc array OR a list)
+$flashRaw = function_exists('flash_take') ? flash_take() : null;
+$flashes = [];
+
+if (is_array($flashRaw)) {
+    // Case A: single assoc message
+    if (array_key_exists('type', $flashRaw) && array_key_exists('message', $flashRaw)) {
+        $flashes = [$flashRaw];
+    } else {
+        // Case B: list of messages
+        $flashes = $flashRaw;
+    }
+}
+
+// Normalise and keep only valid items
+$flashes = array_values(array_filter($flashes, static function ($m): bool {
+    return is_array($m) && isset($m['message']) && (string)$m['message'] !== '';
+}));
 ?>
 <!doctype html>
 <html lang="en">
@@ -30,6 +46,9 @@ $flash = function_exists('flash_take') ? flash_take() : null;
 
     <!-- Alertify CSS (local) -->
     <link rel="stylesheet" href="/public/assets/css/alertify.min.css">
+
+    <!-- Alpine (local) -->
+    <script src="/public/assets/js/alpine.min.js" defer></script>
 </head>
 <body class="bg-gray-50 text-gray-900">
 
@@ -49,36 +68,23 @@ $flash = function_exists('flash_take') ? flash_take() : null;
             <nav class="flex items-center gap-2 text-sm">
                 <?php if (($u['role'] ?? 'user') === 'admin'): ?>
                     <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=admin_users">
-                        Users
-                    </a>
+                       href="/public/index.php?r=admin_users">Users</a>
 
                     <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=admin_levels">
-                        Taxonomy
-                    </a>
+                       href="/public/index.php?r=admin_levels">Taxonomy</a>
 
                     <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=admin_questions">
-                        Questions
-                    </a>
+                       href="/public/index.php?r=admin_questions">Questions</a>
 
                     <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=admin_reset_requests">
-                        Reset requests
-                    </a>
+                       href="/public/index.php?r=admin_reset_requests">Reset requests</a>
                 <?php else: ?>
-                    <!-- Student view -->
                     <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                       href="/public/index.php?r=taxonomy_selector">
-                        Topics
-                    </a>
+                       href="/public/index.php?r=taxonomy_selector">Topics</a>
                 <?php endif; ?>
 
                 <a class="px-3 py-2 rounded-lg hover:bg-gray-50 border border-gray-200"
-                   href="/public/index.php?r=logout">
-                    Sign out
-                </a>
+                   href="/public/index.php?r=logout">Sign out</a>
             </nav>
         <?php endif; ?>
     </div>
@@ -88,22 +94,24 @@ $flash = function_exists('flash_take') ? flash_take() : null;
     <?php require $view_file; ?>
 </main>
 
-<!-- Alpine (local) -->
-<script src="/public/assets/js/alpine.min.js" defer></script>
-
 <!-- Alertify (local) -->
 <script src="/public/assets/js/alertify.min.js"></script>
 
-<?php if (!empty($flash) && is_array($flash)): ?>
+<?php if (!empty($flashes)): ?>
     <script>
         (function () {
-            const type = <?= json_encode((string)($flash['type'] ?? 'info')) ?>;
-            const msg  = <?= json_encode((string)($flash['message'] ?? '')) ?>;
-            if (!msg) return;
+            const items = <?= json_encode($flashes, JSON_UNESCAPED_SLASHES) ?>;
+            if (!Array.isArray(items)) return;
 
-            if (type === 'success') alertify.success(msg);
-            else if (type === 'error') alertify.error(msg);
-            else alertify.message(msg);
+            items.forEach(function (it) {
+                const type = String(it.type || 'info');
+                const msg  = String(it.message || '');
+                if (!msg) return;
+
+                if (type === 'success') alertify.success(msg);
+                else if (type === 'error') alertify.error(msg);
+                else alertify.message(msg);
+            });
         })();
     </script>
 <?php endif; ?>

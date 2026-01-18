@@ -34,6 +34,13 @@
     You must select at least one topic. Questions are drawn randomly across the selected topics.
   </div>
 
+  <!-- API error (optional display) -->
+  <template x-if="apiError">
+    <div class="mb-4 p-3 rounded-xl border border-red-200 bg-red-50 text-xs text-red-700">
+      <strong>Error:</strong> <span x-text="apiError"></span>
+    </div>
+  </template>
+
   <!-- Single quiz-start form -->
   <form method="post" action="/public/index.php?r=quiz_start" class="space-y-4">
     <?= csrf_field() ?>
@@ -68,6 +75,7 @@
             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm"
             x-model="moduleId"
             @change="onModuleChange"
+            :disabled="!levelId"
           >
             <option value="">Select module</option>
             <template x-for="m in modules" :key="m.id">
@@ -83,6 +91,7 @@
             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm"
             x-model="subjectId"
             @change="onSubjectChange"
+            :disabled="!moduleId"
           >
             <option value="">Select subject</option>
             <template x-for="s in subjects" :key="s.id">
@@ -106,23 +115,26 @@
             x-model="topicSearch"
             class="w-full px-3 py-2 rounded-lg border border-gray-300 text-xs"
             placeholder="Search topic..."
+            :disabled="!subjectId"
           >
         </div>
 
         <!-- Pills -->
-        <div class="border border-gray-200 rounded-xl bg-white px-3 py-3">
-          <template x-if="filteredTopics.length === 0">
+        <div class="border border-gray-200 rounded-xl bg-white px-3 py-3 min-h-[56px]">
+          <!-- EMPTY / NOTE -->
+          <template x-if="filteredTopics().length === 0">
             <p class="text-xs text-gray-500">
               <span x-show="!subjectId">Select a subject to load topics.</span>
               <span x-show="subjectId">No topics match your search.</span>
             </p>
           </template>
 
-          <div class="flex flex-wrap gap-2" x-show="filteredTopics.length > 0">
-            <template x-for="t in filteredTopics" :key="t.id">
+          <!-- LIST -->
+          <div class="flex flex-wrap gap-2" x-show="filteredTopics().length > 0">
+            <template x-for="t in filteredTopics()" :key="t.id">
               <button
                 type="button"
-                @click="toggleTopic(t.id)"
+                @click.prevent="toggleTopic(t.id)"
                 class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium focus:outline-none"
                 :class="isSelected(t.id)
                   ? 'bg-pink-500 text-white'
@@ -239,18 +251,21 @@ function quizTopicScreen(config) {
     // UI
     topicSearch: '',
 
-    // Computed
-    get filteredTopics() {
+    // Diagnostics
+    apiError: '',
+
+    // Computed (method)
+    filteredTopics() {
       if (!this.topicSearch) return this.topics;
       const q = this.topicSearch.toLowerCase();
       return this.topics.filter(t => (t.label || '').toLowerCase().includes(q));
     },
 
     async init() {
+      this.apiError = '';
       try {
-        const res = await fetch('/public/index.php?r=api_levels');
-        const data = await res.json();
-        this.levels = data.map(l => ({
+        const data = await this.fetchJson('/public/index.php?r=api_levels');
+        this.levels = (data || []).map(l => ({
           id: Number(l.id ?? l.level_id),
           label: l.label ?? l.code ?? l.name ?? ('Level ' + (l.id ?? l.level_id)),
         }));
@@ -263,6 +278,23 @@ function quizTopicScreen(config) {
         }
       } catch (e) {
         this.levels = [];
+        this.apiError = e?.message ? String(e.message) : 'Failed to load levels.';
+      }
+    },
+
+    async fetchJson(url) {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+
+      // If server returns HTML (login page), this makes the issue obvious.
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`Request failed (${res.status}) for ${url}: ${text.slice(0, 200)}`);
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        throw new Error(`Invalid JSON from ${url}: ${text.slice(0, 200)}`);
       }
     },
 
@@ -288,30 +320,36 @@ function quizTopicScreen(config) {
     },
 
     async onLevelChange() {
+      this.apiError = '';
       this.moduleId = '';
       this.subjectId = '';
       this.modules = [];
       this.subjects = [];
       this.topics = [];
       this.selectedTopicIds = [];
+      this.topicSearch = '';
       if (this.levelId) {
         await this.loadModules();
       }
     },
 
     async onModuleChange() {
+      this.apiError = '';
       this.subjectId = '';
       this.subjects = [];
       this.topics = [];
       this.selectedTopicIds = [];
+      this.topicSearch = '';
       if (this.moduleId) {
         await this.loadSubjects();
       }
     },
 
     async onSubjectChange() {
+      this.apiError = '';
       this.topics = [];
       this.selectedTopicIds = [];
+      this.topicSearch = '';
       if (this.subjectId) {
         await this.loadTopics();
       }
@@ -319,23 +357,35 @@ function quizTopicScreen(config) {
 
     async loadModules() {
       if (!this.levelId) return;
-      const res = await fetch('/public/index.php?r=api_modules&level_id=' + this.levelId);
-      const data = await res.json();
-      this.modules = data.map(m => this.normaliseModule(m));
+      try {
+        const data = await this.fetchJson('/public/index.php?r=api_modules&level_id=' + encodeURIComponent(this.levelId));
+        this.modules = (data || []).map(m => this.normaliseModule(m));
+      } catch (e) {
+        this.modules = [];
+        this.apiError = e?.message ? String(e.message) : 'Failed to load modules.';
+      }
     },
 
     async loadSubjects() {
       if (!this.moduleId) return;
-      const res = await fetch('/public/index.php?r=api_subjects&module_id=' + this.moduleId);
-      const data = await res.json();
-      this.subjects = data.map(s => this.normaliseSubject(s));
+      try {
+        const data = await this.fetchJson('/public/index.php?r=api_subjects&module_id=' + encodeURIComponent(this.moduleId));
+        this.subjects = (data || []).map(s => this.normaliseSubject(s));
+      } catch (e) {
+        this.subjects = [];
+        this.apiError = e?.message ? String(e.message) : 'Failed to load subjects.';
+      }
     },
 
     async loadTopics() {
       if (!this.subjectId) return;
-      const res = await fetch('/public/index.php?r=api_topics&subject_id=' + this.subjectId);
-      const data = await res.json();
-      this.topics = data.map(t => this.normaliseTopic(t));
+      try {
+        const data = await this.fetchJson('/public/index.php?r=api_topics&subject_id=' + encodeURIComponent(this.subjectId));
+        this.topics = (data || []).map(t => this.normaliseTopic(t));
+      } catch (e) {
+        this.topics = [];
+        this.apiError = e?.message ? String(e.message) : 'Failed to load topics.';
+      }
     },
 
     isSelected(id) {
