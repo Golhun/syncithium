@@ -4,10 +4,18 @@ declare(strict_types=1);
 /**
  * Login view (two-step: verify email, then show password)
  *
+ * Change requested:
+ * - Remove the “card” container
+ * - Make the login layout fuse into the page
+ * - Place the artwork on the actual page (top-right), scaled up, blended
+ *
  * Assumes:
  * - csrf_field()
  * - e()
  * - icon($name, $class = 'h-5 w-5', $variant = 'outline')
+ *
+ * Image:
+ * - Put PNG at: /public/assets/img/sync-heart.png
  */
 
 $emailValue = '';
@@ -18,42 +26,39 @@ try {
 }
 ?>
 
-<div class="min-h-[72vh] flex items-center justify-center px-4">
-  <div class="w-full max-w-md">
+<div class="w-full">
+  <!-- Content -->
+  <div class="relative max-w-6xl mx-auto px-4">
+    <div class="grid lg:grid-cols-2 items-center gap-10 py-10">
 
-    <div id="loginCard" class="bg-white rounded-2xl ring-1 ring-slate-200 overflow-hidden opacity-0 translate-y-2">
-      <div class="h-1 bg-gradient-to-r from-sky-600 via-sky-500 to-sky-400"></div>
+      <!-- Left: Brand / context -->
+      <div class="max-w-xl">
 
-      <div class="p-6 md:p-8">
-        <!-- Header -->
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="h-10 w-10 rounded-xl bg-sky-50 ring-1 ring-sky-100 flex items-center justify-center shrink-0">
-              <?= icon('lock-closed', 'h-5 w-5 text-sky-700', 'solid') ?>
-            </div>
+
+        <h1 class="mt-4 text-3xl sm:text-4xl font-semibold text-slate-900 leading-tight">
+          Welcome back to <span class="text-sky-700">Syncithium</span>
+        </h1>
+
+        <p class="mt-3 text-slate-600 max-w-lg">
+          Continue your learning journey.
+        </p>
+      </div>
+
+      <!-- Right: Form (no card, fused into page) -->
+      <div id="loginRoot" class="w-full max-w-md lg:justify-self-end opacity-0 translate-y-2">
+        <form id="loginForm" method="post" action="/public/index.php?r=login" class="space-y-5" novalidate>
+          <?= csrf_field() ?>
+          <input type="hidden" name="stage" id="stage" value="email">
+
+          <!-- Form heading -->
+          <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <h1 class="text-xl font-semibold text-slate-900">Sign in</h1>
-              <p class="text-sm text-slate-500 mt-1">Enter your email to continue.</p>
+              <h2 class="text-xl font-semibold text-slate-900">Sign in</h2>
             </div>
           </div>
 
-          <span class="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs bg-white ring-1 ring-slate-200 text-slate-600">
-            <?= icon('shield-check', 'h-4 w-4 text-slate-500', 'outline') ?>
-            Secure
-          </span>
-        </div>
-
-        <div class="mt-6 border-t border-slate-200"></div>
-
-        <!-- Form -->
-        <form id="loginForm" method="post" action="/public/index.php?r=login" class="mt-6 space-y-4">
-          <?= csrf_field() ?>
-
-          <input type="hidden" name="stage" id="stage" value="email">
-
           <!-- Email -->
           <div class="space-y-1.5">
-            <label class="block text-sm font-medium text-slate-700" for="email">Email</label>
 
             <div class="relative">
               <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -68,29 +73,25 @@ try {
                 value="<?= e($emailValue) ?>"
                 placeholder="you@example.com"
                 autocomplete="email"
-                class="w-full rounded-xl ring-1 ring-slate-200 bg-white pl-10 pr-10 py-2.5 text-sm
+                class="w-full rounded-2xl ring-1 ring-slate-200 bg-white/80 backdrop-blur pl-10 pr-10 py-3 text-sm
                        focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition"
               />
 
-              <!-- Verified check -->
               <div id="emailOkIcon" class="hidden absolute inset-y-0 right-0 items-center pr-3 text-emerald-600">
                 <?= icon('check-circle', 'h-5 w-5', 'solid') ?>
               </div>
             </div>
 
-            <!-- Status line -->
-            <div id="emailMsg" class="text-xs text-slate-500 flex items-start gap-2 min-h-[18px]" aria-live="polite"></div>
+            <div id="emailMsg" class="text-xs text-slate-500 flex items-start gap-2 min-h-[18px] transition-opacity duration-200" aria-live="polite"></div>
 
-            <!-- Change email -->
             <button type="button" id="changeEmailBtn"
                     class="hidden text-xs font-semibold text-slate-700 hover:text-slate-900 underline underline-offset-2 transition">
               Change email
             </button>
           </div>
 
-          <!-- Password (hidden until email verified, but visible if JS disabled) -->
-          <div id="passwordWrap" class="space-y-1.5">
-            <label class="block text-sm font-medium text-slate-700" for="password">Password</label>
+          <!-- Password -->
+          <div id="passwordWrap" class="hidden space-y-1.5">
 
             <div class="relative">
               <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -103,7 +104,7 @@ try {
                 type="password"
                 placeholder="Enter your password"
                 autocomplete="current-password"
-                class="w-full rounded-xl ring-1 ring-slate-200 bg-white pl-10 pr-12 py-2.5 text-sm
+                class="w-full rounded-2xl ring-1 ring-slate-200 bg-white/80 backdrop-blur pl-10 pr-12 py-3 text-sm
                        focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition"
               />
 
@@ -120,10 +121,9 @@ try {
                  href="/public/index.php?r=forgot_password">
                 Forgot password?
               </a>
-
               <span class="text-xs text-slate-500 inline-flex items-center gap-1">
                 <?= icon('information-circle', 'h-4 w-4 text-slate-400', 'outline') ?>
-                No public registration
+                Admin-provisioned
               </span>
             </div>
           </div>
@@ -132,7 +132,7 @@ try {
           <button
             type="submit"
             id="primaryBtn"
-            class="w-full rounded-xl bg-slate-900 text-white py-2.5 text-sm font-semibold
+            class="w-full rounded-2xl bg-slate-900 text-white py-3 text-sm font-semibold
                    hover:opacity-95 active:opacity-90
                    focus:outline-none focus:ring-4 focus:ring-sky-100 transition relative overflow-hidden"
           >
@@ -145,29 +145,14 @@ try {
             </span>
           </button>
 
-          <p class="text-xs text-slate-500 mt-2">
-            If you need access, contact an admin.
+          <p class="text-xs text-slate-500">
+            If you need access, kindly contact an admin.
           </p>
         </form>
       </div>
 
-      <div class="px-6 md:px-8 pb-5">
-        <div class="flex items-center justify-between text-xs text-slate-500">
-          <span class="inline-flex items-center gap-2">
-            <?= icon('globe-alt', 'h-4 w-4 text-slate-400', 'outline') ?>
-            Syncithium
-          </span>
-          <span class="inline-flex items-center gap-2">
-            <?= icon('lock-closed', 'h-4 w-4 text-slate-400', 'outline') ?>
-            Session protected
-          </span>
-        </div>
-      </div>
     </div>
 
-    <div class="mt-4 text-center text-xs text-slate-500">
-      Tip: Use a password manager. Your future self will thank you.
-    </div>
   </div>
 </div>
 
@@ -186,18 +171,17 @@ try {
 
 <script>
 (function () {
-  // Elements
-  const card = document.getElementById('loginCard');
+  const root = document.getElementById('loginRoot');
   const form = document.getElementById('loginForm');
 
   const stage = document.getElementById('stage');
-  const email = document.getElementById('email');
+  const emailEl = document.getElementById('email');
   const emailMsg = document.getElementById('emailMsg');
   const emailOkIcon = document.getElementById('emailOkIcon');
   const changeEmailBtn = document.getElementById('changeEmailBtn');
 
   const pwWrap = document.getElementById('passwordWrap');
-  const password = document.getElementById('password');
+  const passwordEl = document.getElementById('password');
 
   const togglePwBtn = document.getElementById('togglePwBtn');
   const pwEyeOn = document.getElementById('pwEyeOn');
@@ -210,13 +194,12 @@ try {
 
   // Entrance animation
   requestAnimationFrame(() => {
-    card.classList.add('animate-fadeInUp');
-    card.classList.remove('opacity-0', 'translate-y-2');
+    root.classList.add('animate-fadeInUp');
+    root.classList.remove('opacity-0', 'translate-y-2');
   });
 
   // Default: hide password until verified (JS-enabled behavior)
   let verified = false;
-  hidePasswordUI();
 
   function setLoading(on) {
     primaryBtn.disabled = !!on;
@@ -225,7 +208,7 @@ try {
   }
 
   function setEmailMessage(text, type) {
-    // type: 'ok' | 'error' | 'info'
+    emailMsg.style.opacity = '0';
     const base = 'inline-flex items-start gap-2';
     const color = (type === 'error') ? 'text-rose-600' : (type === 'ok') ? 'text-emerald-700' : 'text-slate-500';
     const icon = (type === 'error')
@@ -236,6 +219,7 @@ try {
 
     emailMsg.className = base + ' ' + color;
     emailMsg.innerHTML = icon + '<span>' + escapeHtml(text) + '</span>';
+    requestAnimationFrame(() => { emailMsg.style.opacity = '1'; });
   }
 
   function escapeHtml(str) {
@@ -245,9 +229,8 @@ try {
   }
 
   function hidePasswordUI() {
-    // If JS is running, we control visibility
     pwWrap.classList.add('hidden');
-    password.required = false;
+    passwordEl.required = false;
     btnText.textContent = 'Continue';
     stage.value = 'email';
     emailOkIcon.classList.add('hidden');
@@ -257,47 +240,46 @@ try {
   function showPasswordUI() {
     pwWrap.classList.remove('hidden');
     pwWrap.classList.add('animate-slideDown');
-    password.required = true;
+    passwordEl.required = true;
     btnText.textContent = 'Sign in';
     stage.value = 'password';
     emailOkIcon.classList.remove('hidden');
     changeEmailBtn.classList.remove('hidden');
-    password.focus();
+    passwordEl.focus();
   }
 
   function lockEmail(lock) {
-    email.readOnly = !!lock;
-    email.classList.toggle('bg-slate-50', !!lock);
-    email.classList.toggle('cursor-not-allowed', !!lock);
+    emailEl.readOnly = !!lock;
+    emailEl.classList.toggle('bg-slate-50', !!lock);
+    emailEl.classList.toggle('cursor-not-allowed', !!lock);
   }
 
   changeEmailBtn.addEventListener('click', () => {
     verified = false;
     lockEmail(false);
     hidePasswordUI();
-    email.focus();
+    emailEl.focus();
     setEmailMessage('Enter your email to continue.', 'info');
   });
 
-  // Toggle password visibility
   togglePwBtn.addEventListener('click', () => {
-    const isPw = password.type === 'password';
-    password.type = isPw ? 'text' : 'password';
+    const isPw = passwordEl.type === 'password';
+    passwordEl.type = isPw ? 'text' : 'password';
     pwEyeOn.classList.toggle('hidden', !isPw);
     pwEyeOff.classList.toggle('hidden', isPw);
     togglePwBtn.setAttribute('aria-label', isPw ? 'Hide password' : 'Show password');
   });
 
-  // Submit handler: Step 1 verifies email, Step 2 submits to server
   form.addEventListener('submit', async (ev) => {
-    if (verified) return; // proceed with normal POST login
-
+    // If already verified, let the form submit normally to the backend
+    if (verified) return; 
+    
     ev.preventDefault();
 
     const value = (email.value || '').trim();
     if (!value) {
       setEmailMessage('Please enter your email.', 'error');
-      email.focus();
+      emailEl.focus();
       return;
     }
 
@@ -327,7 +309,6 @@ try {
         return;
       }
 
-      // Verified
       verified = true;
       lockEmail(true);
       setEmailMessage('Email verified. Please enter your password.', 'ok');
@@ -340,7 +321,6 @@ try {
     }
   });
 
-  // Initial hint
   setEmailMessage('Enter your email to continue.', 'info');
 })();
 </script>

@@ -39,16 +39,19 @@ $flashes = array_values(array_filter($flashes, static function ($m): bool {
 
 $currentR = isset($_GET['r']) ? (string)$_GET['r'] : '';
 
+// Helper: is this the login route? used to suppress header and change layout
+$isLogin = ($currentR === 'login');
+
 
 // --- Nav item renderer ---
 function nav_item(string $href, string $label, string $iconName, bool $active = false): string
 {
     $activeClass = $active
-        ? 'bg-sky-600 text-white border-sky-600'
-        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50';
+        ? 'bg-slate-900 text-white ring-slate-900'
+        : 'bg-white text-slate-800 ring-slate-200 hover:bg-slate-50';
 
     $icon = $active
-        ? hi_svg($iconName, 'solid', 'h-4 w-4')
+        ? hi_svg($iconName, 'solid', 'h-4 w-4 text-white')
         : hi_svg($iconName, 'outline', 'h-4 w-4');
 
     $html = '<a href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '"'
@@ -97,8 +100,9 @@ function badge(string $text, string $tone = 'gray'): string
     <script src="/public/assets/js/alpine.min.js" defer></script>
 </head>
 
-<body class="bg-gray-50 text-gray-900">
-<header class="border-b border-gray-200 bg-white">
+<body class="bg-slate-50">
+<?php if (! $isLogin): ?>
+<header class="border-b border-gray-200 bg-white shadow-sm">
     <div class="max-w-6xl mx-auto px-6 py-3">
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-3 min-w-0">
@@ -121,7 +125,7 @@ function badge(string $text, string $tone = 'gray'): string
                 <div class="flex items-center gap-3">
                     <!-- Quick actions (always visible) -->
                     <?php if ($isAdmin): ?>
-                        <!-- Admin can also take quizzes like a normal user -->
+                        <!-- Admin can also take quizzes -->
                         <a href="/public/index.php?r=taxonomy_selector"
                            class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm transition">
                             <?= hi_svg('play', 'outline', 'h-4 w-4') ?>
@@ -133,7 +137,7 @@ function badge(string $text, string $tone = 'gray'): string
                     <!-- User menu -->
                     <div x-data="{ open:false }" class="relative">
                         <button type="button"
-                                class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm transition"
+                                class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm transition focus:outline-none focus:ring-4 focus:ring-sky-100"
                                 @click="open = !open"
                                 :aria-expanded="open ? 'true' : 'false'">
                             <?= hi_svg('user-circle', 'outline', 'h-5 w-5') ?>
@@ -142,7 +146,7 @@ function badge(string $text, string $tone = 'gray'): string
                         </button>
 
                         <div x-cloak x-show="open" @click.outside="open=false"
-                             class="absolute right-0 mt-2 w-72 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden z-50">
+                             class="absolute right-0 mt-2 w-80 rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden z-50">
                             <div class="p-3 border-b border-gray-200">
                                 <div class="text-sm font-semibold truncate"><?= htmlspecialchars((string)$u['email']) ?></div>
                                 <div class="mt-1">
@@ -153,45 +157,45 @@ function badge(string $text, string $tone = 'gray'): string
                             <div class="p-2 space-y-1">
                                 <?php if ($isAdmin): ?>
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_users">
+                                       href="/public/index.php?r=admin_users" title="Manage users and access">
                                         <?= hi_svg('users', 'outline', 'h-4 w-4') ?>
-                                        <span>Admin, Users</span>
+                                        <span>User Management</span>
                                     </a>
 
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_levels">
+                                       href="/public/index.php?r=admin_levels" title="Manage levels, modules, subjects, topics">
                                         <?= hi_svg('adjustments-horizontal', 'outline', 'h-4 w-4') ?>
-                                        <span>Admin, Taxonomy</span>
+                                        <span>Taxonomy</span>
                                     </a>
 
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_questions">
+                                       href="/public/index.php?r=admin_questions" title="Manage the question bank">
                                         <?= hi_svg('document-text', 'outline', 'h-4 w-4') ?>
-                                        <span>Admin, Questions</span>
+                                        <span>Question Bank</span>
                                     </a>
 
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_question_reports">
+                                       href="/public/index.php?r=admin_question_reports" title="Review user-submitted reports">
                                         <?= hi_svg('flag', 'outline', 'h-4 w-4') ?>
-                                        <span>Admin, Reports</span>
+                                        <span>Reports</span>
                                     </a>
 
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_reset_requests">
+                                       href="/public/index.php?r=admin_reset_requests" title="Approve password reset requests">
                                         <?= hi_svg('key', 'outline', 'h-4 w-4') ?>
-                                        <span>Admin, Reset requests</span>
+                                        <span>Reset Requests</span>
                                     </a>
 
                                     <div class="my-2 border-t border-gray-200"></div>
                                 <?php else: ?>
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=taxonomy_selector">
+                                       href="/public/index.php?r=taxonomy_selector" title="Start a new quiz">
                                         <?= hi_svg('play', 'outline', 'h-4 w-4') ?>
                                         <span>Take Quiz</span>
                                     </a>
 
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=my_reports">
+                                       href="/public/index.php?r=my_reports" title="View your submitted reports">
                                         <?= hi_svg('flag', 'outline', 'h-4 w-4') ?>
                                         <span>My Reports</span>
                                     </a>
@@ -213,11 +217,11 @@ function badge(string $text, string $tone = 'gray'): string
 
         <?php if ($u): ?>
             <!-- Secondary navigation row (quick tabs) -->
-            <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            <div class="mt-4 flex items-center justify-between gap-3 flex-wrap">
                 <div class="flex items-center gap-2 flex-wrap">
                     <?php if ($isAdmin): ?>
                         <?= nav_item('/public/index.php?r=admin_users', 'Users', 'users', $currentR === 'admin_users') ?>
-                        <?= nav_item('/public/index.php?r=admin_levels', 'Taxonomy', 'adjustments-horizontal', $currentR === 'admin_levels') ?>
+                        <?= nav_item('/public/index.php?r=admin_levels', 'Taxonomy', 'adjustments-horizontal', in_array($currentR, ['admin_levels', 'admin_modules', 'admin_subjects', 'admin_topics', 'admin_taxonomy_import'])) ?>
                         <?= nav_item('/public/index.php?r=admin_questions', 'Questions', 'document-text', $currentR === 'admin_questions') ?>
                         <?= nav_item('/public/index.php?r=admin_question_reports', 'Reports', 'flag', $currentR === 'admin_question_reports') ?>
                         <?= nav_item('/public/index.php?r=admin_reset_requests', 'Reset requests', 'key', $currentR === 'admin_reset_requests') ?>
@@ -237,10 +241,27 @@ function badge(string $text, string $tone = 'gray'): string
         <?php endif; ?>
     </div>
 </header>
+<?php endif; ?>
 
+<?php if ($isLogin): ?><!-- Login page has its own layout -->
+<div class="relative min-h-screen">
+    <!-- Page-level fused artwork (TOP-RIGHT, scaled up) -->
+    <div class="pointer-events-none absolute -right-24 -top-24 w-[760px] opacity-[0.80] select-none">
+        <img src="/public/assets/img/sync-heart.png" alt="" class="w-full h-auto" draggable="false">
+    </div>
+
+    <!-- Page-level blending layer so the art feels “inside” the surface -->
+    <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-50/70 via-white/80 to-white/70"></div>
+
+    <main class="min-h-screen flex items-center justify-center px-6 py-6">
+        <?php require $view_file; ?>
+    </main>
+</div>
+<?php else: ?><!-- Standard page layout -->
 <main class="max-w-6xl mx-auto px-6 py-6">
     <?php require $view_file; ?>
 </main>
+<?php endif; ?>
 
 <!-- Alertify (local) -->
 <script src="/public/assets/js/alertify.min.js"></script>

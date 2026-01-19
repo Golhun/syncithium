@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-function e(string $v): string {
-  return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+function e(mixed $v): string {
+  return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
 }
 
 function redirect(string $to): never {
@@ -33,43 +33,26 @@ function random_password(int $length = 14): string {
   return substr($raw, 0, $length);
 }
 
-
-
-function base64url_encode(string $bin): string {
-  return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
-}
-
-function make_reset_token(): string {
-  // 32 bytes => 256-bit entropy, exceeds OWASP minimum guidance
-  return base64url_encode(random_bytes(32));
-}
-
-function reset_token_hash(string $token, array $config): string {
-  $pepper = (string)($config['security']['reset_token_pepper'] ?? '');
-  // HMAC-SHA256, store hex
-  return hash_hmac('sha256', $token, $pepper);
-}
-
 function render(string $view, array $data = []): void
 {
     // Expose these globals inside the function so layout.php can use them
     global $db, $config;
 
-    // Make $data keys available as local variables in views/layout
+    // Make variables in $data available to the view file
     extract($data);
 
+    // Build the full path to the view file
     $view_file = __DIR__ . '/views/' . $view . '.php';
+
     if (!is_file($view_file)) {
         http_response_code(500);
-        echo 'View not found: ' . htmlspecialchars($view);
-        echo 'Resolved path: ' . htmlspecialchars($view_file);
-        return;
+        echo "View not found: " . htmlspecialchars($view);
+        exit;
     }
 
-    // Layout will use $view_file, $db, $config, etc.
     require __DIR__ . '/views/layout.php';
 }
-
+ 
 function flash_take(): ?array {
     if (empty($_SESSION['flash'])) {
         return null;
@@ -84,5 +67,36 @@ function http_json(array $payload, int $code = 200): void {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload);
+    exit;
+}
+
+/**
+ * Renders a self-contained, styled error page and terminates the script.
+ *
+ * @param int $code The HTTP status code (e.g., 404, 403).
+ * @param string $title The main title for the error (e.g., 'Page Not Found').
+ * @param string $message A technical or straightforward description of the error.
+ * @param string $joke A user-friendly, humorous, and relevant message.
+ * @return never
+ */
+function render_error_page(int $code, string $title, string $message, string $joke): void
+{
+    http_response_code($code);
+
+    // Ensure helpers are available for the standalone error page
+    require_once __DIR__ . '/helpers/icons.php';
+
+    // Data for the view
+    $data = compact('code', 'title', 'message', 'joke');
+    extract($data);
+
+    // Use DIRECTORY_SEPARATOR for better cross-platform compatibility.
+    $view_file = __DIR__ . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'errors' . DIRECTORY_SEPARATOR . "{$code}.php";
+
+    if (!file_exists($view_file)) {
+        $view_file = __DIR__ . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'errors' . DIRECTORY_SEPARATOR . 'generic.php';
+    }
+
+    require $view_file;
     exit;
 }

@@ -1,84 +1,17 @@
-# -----------------------------
-# Syncithium (PHP) - .gitignore
-# -----------------------------
+# Composer dependencies
+/vendor/
 
-# OS / editor junk
+# Node dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Log files
+*.log
+
+# IDE & OS files
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
-desktop.ini
-*.swp
-*.swo
-*.tmp
-*.bak
-
-# IDEs
-.vscode/
-.idea/
-*.code-workspace
-
-# Composer / PHP deps
-/vendor/
-/composer.lock
-
-# Environment / config (DO NOT COMMIT secrets)
-# Keep config.example.php committed
-/config.php
-/config.local.php
-/.env
-/.env.*
-*.env
-
-# Logs
-*.log
-/storage/logs/*
-!/storage/logs/.gitkeep
-
-# Storage runtime (keep folders, ignore runtime files)
-# IMPORTANT: we do NOT blanket-ignore /storage/* because you may keep
-# seed files or sample CSVs there. We ignore only runtime subfolders.
-#/storage/*
-
-/storage/cache/*
-/storage/sessions/*
-/storage/uploads/*
-!/storage/cache/.gitkeep
-!/storage/sessions/.gitkeep
-!/storage/uploads/.gitkeep
-
-# SQLite databases anywhere (most common)
-*.sqlite
-*.sqlite3
-*.db
-
-# If you want to restrict DB ignores only to /storage, use these instead:
-# /storage/*.sqlite
-# /storage/*.sqlite3
-# /storage/*.db
-
-# Public uploads (user-generated)
-#/public/uploads/*
-/public/uploads/*
-!/public/uploads/.gitkeep
-
-# Build artifacts (optional)
-# If you compile Tailwind to public/assets/css/app.css and want it committed, do NOT ignore it.
-# If you prefer to rebuild in each environment, uncomment the next line:
-# /public/assets/css/app.css
-
-# Node tooling (optional, if you use Tailwind locally)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-/package-lock.json
-/yarn.lock
-/pnpm-lock.yaml
-/.parcel-cache
-/.vite
-/dist
-/build
-
-# Test artifacts / coverage
-/coverage/
-.phpunit.result.cache

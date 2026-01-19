@@ -40,32 +40,6 @@ return [
         audit_log_event($db, (int)$admin['id'], 'USER_ENABLE', 'users', $userId);
 
         flash_set('success', 'User enabled.');
-      } elseif ($action === 'reset_password') {
-        // Generate temp password, force change on next login
-        $temp = random_password(14);
-        $hash = password_hash($temp, PASSWORD_DEFAULT);
-
-        $stmt = $db->prepare("
-          UPDATE users
-          SET password_hash = :h, must_change_password = 1
-          WHERE id = :id
-        ");
-        $stmt->execute([':h' => $hash, ':id' => $userId]);
-
-        audit_log_event($db, (int)$admin['id'], 'USER_PASSWORD_RESET', 'users', $userId, [
-          'must_change_password' => 1,
-          'flow' => 'direct_admin_reset',
-        ]);
-
-        // One-time reveal page, not flash
-        reveal_set([
-          'label'        => 'Temporary password generated',
-          'secret_label' => 'Temp password (share securely)',
-          'secret'       => $temp,
-          'meta'         => ['user_id' => $userId],
-        ]);
-
-        redirect('/public/index.php?r=admin_credential_reveal');
       } else {
         flash_set('error', 'Unknown action.');
       }
@@ -270,7 +244,7 @@ return [
       redirect('/public/index.php?r=admin_users');
   },
 
-    // =========================
+  // =========================
   // Admin: password reset requests list
   // =========================
   'admin_reset_requests' => function (PDO $db, array $config): void {
@@ -330,18 +304,14 @@ return [
           redirect('/public/index.php?r=admin_reset_requests');
       }
 
-      if ($action === 'generate_token') {
+      if ($action === 'approve_reset') {
           if (empty($req['user_id'])) {
-              // Email did not map to a user; mark invalid to avoid orphaned tokens
               $stmt = $db->prepare("
                 UPDATE password_reset_requests
                 SET status = 'invalid', processed_at = NOW(), processed_by = :aid
                 WHERE id = :id
               ");
-              $stmt->execute([
-                  ':aid' => (int)$admin['id'],
-                  ':id'  => $requestId,
-              ]);
+              $stmt->execute([':aid' => (int)$admin['id'], ':id' => $requestId]);
 
               audit_log_event($db, (int)$admin['id'], 'PASSWORD_RESET_REQUEST_INVALID', 'password_reset_requests', $requestId);
               flash_set('error', 'Request email does not match an existing account.');
@@ -350,48 +320,29 @@ return [
 
           $userId = (int)$req['user_id'];
 
-          // Generate secure token, store hash only
-          $token = bin2hex(random_bytes(16)); // 32-char hex
-          // Keep consistent with password_reset verifier
-          if (function_exists('reset_token_hash')) {
-              $tokenHash = reset_token_hash($token, $config);
-          } else {
-              $tokenHash = hash('sha256', $token);
-          }
+          $temp = random_password(14);
+          $hash = password_hash($temp, PASSWORD_DEFAULT);
 
           $stmt = $db->prepare("
-            INSERT INTO password_resets (user_id, token_hash, expires_at, created_at)
-            VALUES (:uid, :th, DATE_ADD(NOW(), INTERVAL 30 MINUTE), NOW())
+            UPDATE users
+            SET password_hash = :h, must_change_password = 1, failed_attempts = 0, last_failed_at = NULL, lockout_until = NULL
+            WHERE id = :id
           ");
-          $stmt->execute([
-              ':uid' => $userId,
-              ':th'  => $tokenHash,
-          ]);
+          $stmt->execute([':h' => $hash, ':id' => $userId]);
 
           $stmt = $db->prepare("
             UPDATE password_reset_requests
             SET status = 'processed', processed_at = NOW(), processed_by = :aid
             WHERE id = :id
           ");
-          $stmt->execute([
-              ':aid' => (int)$admin['id'],
-              ':id'  => $requestId,
-          ]);
+          $stmt->execute([':aid' => (int)$admin['id'], ':id' => $requestId]);
 
-          audit_log_event(
-              $db,
-              (int)$admin['id'],
-              'PASSWORD_RESET_TOKEN_GENERATE',
-              'users',
-              $userId,
-              ['request_id' => $requestId]
-          );
+          audit_log_event($db, (int)$admin['id'], 'PASSWORD_RESET_VIA_REQUEST', 'users', $userId, ['request_id' => $requestId]);
 
-          // Show token on one-time reveal screen
           reveal_set([
-              'label'        => 'Password reset token (share securely)',
-              'secret_label' => 'Reset token',
-              'secret'       => $token,
+              'label'        => 'Temporary password for user',
+              'secret_label' => 'Temp password (share securely)',
+              'secret'       => $temp,
               'meta'         => ['user_id' => $userId, 'request_id' => $requestId],
           ]);
 

@@ -457,16 +457,13 @@ function topicsAdmin() {
 
     next() {
       if (this.page < this.totalPages) {
-        this.page++;
-        // recalc handled by watcher, but safe to call directly too
-        this.recalc();
+        this.page++; // The watcher on 'page' will trigger recalc()
       }
     },
 
     prev() {
       if (this.page > 1) {
-        this.page--;
-        this.recalc();
+        this.page--; // The watcher on 'page' will trigger recalc()
       }
     },
   }

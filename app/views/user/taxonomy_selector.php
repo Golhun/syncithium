@@ -15,6 +15,7 @@
   <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
     <div class="min-w-0">
       <div class="flex items-center gap-2">
+        <?= icon('play-circle', 'h-6 w-6 text-sky-700', 'solid') ?>
         <h1 class="text-2xl font-semibold">Start Quiz</h1>
         <span class="inline-flex items-center px-2 py-1 text-xs rounded-lg ring-1 ring-gray-200 bg-white text-gray-700">
           Setup
@@ -31,7 +32,7 @@
         class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm"
         title="Load a preset selection"
       >
-        <span class="inline-flex h-2 w-2 rounded-full bg-sky-500"></span>
+        <?= icon('sparkles', 'h-4 w-4 text-sky-600', 'outline') ?>
         <span>Load preset</span>
         <span class="px-2 py-1 rounded-lg bg-sky-50 text-sky-700 text-xs border border-sky-200">
           Level 200, GEM 201
@@ -42,30 +43,42 @@
 
   <!-- Progress / guidance row -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-    <div class="rounded-2xl border border-gray-200 bg-white p-4">
-      <div class="text-xs text-gray-500">Step 1</div>
-      <div class="font-semibold mt-1">Pick scope</div>
-      <div class="text-xs text-gray-500 mt-1">Level → Module → Subject</div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
+      <?= icon('map', 'h-6 w-6 text-sky-600', 'outline') ?>
+      <div>
+        <div class="text-xs text-gray-500">Step 1</div>
+        <div class="font-semibold mt-1">Pick scope</div>
+        <div class="text-xs text-gray-500 mt-1">Level → Module → Subject</div>
+      </div>
     </div>
-    <div class="rounded-2xl border border-gray-200 bg-white p-4">
-      <div class="text-xs text-gray-500">Step 2</div>
-      <div class="font-semibold mt-1">Select topics</div>
-      <div class="text-xs text-gray-500 mt-1">Choose one or many</div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
+      <?= icon('tag', 'h-6 w-6 text-sky-600', 'outline') ?>
+      <div>
+        <div class="text-xs text-gray-500">Step 2</div>
+        <div class="font-semibold mt-1">Select topics</div>
+        <div class="text-xs text-gray-500 mt-1">Choose one or many</div>
+      </div>
     </div>
-    <div class="rounded-2xl border border-gray-200 bg-white p-4">
-      <div class="text-xs text-gray-500">Step 3</div>
-      <div class="font-semibold mt-1">Start quiz</div>
-      <div class="text-xs text-gray-500 mt-1">Questions, scoring, timer</div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-4 flex items-start gap-3">
+      <?= icon('rocket-launch', 'h-6 w-6 text-sky-600', 'outline') ?>
+      <div>
+        <div class="text-xs text-gray-500">Step 3</div>
+        <div class="font-semibold mt-1">Start quiz</div>
+        <div class="text-xs text-gray-500 mt-1">Questions, scoring, timer</div>
+      </div>
     </div>
   </div>
 
   <!-- API error -->
   <template x-if="apiError">
-    <div class="mb-5 p-4 rounded-2xl border border-rose-200 bg-rose-50 text-sm text-rose-800">
-      <div class="font-semibold">Could not load quiz data</div>
-      <div class="mt-1" x-text="apiError"></div>
-      <div class="mt-2 text-xs text-rose-700">
-        If this persists, confirm you are logged in and the API routes return JSON.
+    <div class="mb-5 p-4 rounded-2xl border border-rose-200 bg-rose-50 text-sm text-rose-800 flex items-start gap-3">
+      <?= icon('exclamation-triangle', 'h-5 w-5 text-rose-500', 'solid') ?>
+      <div>
+        <div class="font-semibold">Could not load quiz data</div>
+        <div class="mt-1" x-text="apiError"></div>
+        <div class="mt-2 text-xs text-rose-700">
+          If this persists, confirm you are logged in and the API routes return JSON.
+        </div>
       </div>
     </div>
   </template>
@@ -78,8 +91,11 @@
     <section class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
         <div class="flex items-start justify-between gap-4">
-          <div>
+          <div class="flex items-center gap-2">
+            <?= icon('map', 'h-4 w-4 text-gray-600', 'outline') ?>
             <div class="text-sm font-semibold">Scope</div>
+          </div>
+          <div>
             <div class="text-xs text-gray-500 mt-1">Select Level, Module, then Subject to load topics.</div>
           </div>
           <div class="text-xs text-gray-500 whitespace-nowrap">
@@ -92,7 +108,10 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <!-- Level -->
           <div>
-            <label class="block text-xs font-semibold text-gray-700 mb-1">Level</label>
+            <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-1">
+              <?= icon('academic-cap', 'h-4 w-4 text-gray-500', 'outline') ?>
+              <span>Level</span>
+            </label>
             <select
               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400"
               x-model="levelId"
@@ -108,7 +127,10 @@
 
           <!-- Module -->
           <div>
-            <label class="block text-xs font-semibold text-gray-700 mb-1">Module</label>
+            <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-1">
+              <?= icon('squares-2x2', 'h-4 w-4 text-gray-500', 'outline') ?>
+              <span>Module</span>
+            </label>
             <select
               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
               x-model="moduleId"
@@ -125,7 +147,10 @@
 
           <!-- Subject -->
           <div>
-            <label class="block text-xs font-semibold text-gray-700 mb-1">Subject</label>
+            <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-1">
+              <?= icon('bookmark-square', 'h-4 w-4 text-gray-500', 'outline') ?>
+              <span>Subject</span>
+            </label>
             <select
               class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
               x-model="subjectId"
@@ -147,14 +172,17 @@
     <section class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
         <div class="flex items-start justify-between gap-4">
-          <div>
+          <div class="flex items-center gap-2">
+            <?= icon('tag', 'h-4 w-4 text-gray-600', 'outline') ?>
             <div class="text-sm font-semibold">Topics</div>
+          </div>
+          <div>
             <div class="text-xs text-gray-500 mt-1">Select one or many topics. Questions are drawn randomly across them.</div>
           </div>
 
           <div class="flex items-center gap-2 text-xs whitespace-nowrap">
             <span class="inline-flex items-center px-2 py-1 rounded-lg ring-1 ring-gray-200 bg-white text-gray-700">
-              Selected:
+              <?= icon('check-circle', 'h-4 w-4 text-gray-500', 'outline') ?> Selected:
               <span class="ml-1 font-semibold" x-text="selectedTopicIds.length"></span>
             </span>
             <span class="text-gray-400">Step 2 of 3</span>
@@ -166,30 +194,36 @@
         <!-- Search + bulk actions -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div class="md:col-span-2">
-            <label class="block text-xs font-semibold text-gray-700 mb-1">Search topics</label>
-            <input
-              type="text"
-              x-model="topicSearch"
-              class="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
-              placeholder="Type to filter topics..."
-              :disabled="!subjectId"
-            >
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Filter topics</label>
+            <div class="relative">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <?= icon('magnifying-glass', 'h-5 w-5 text-gray-400', 'outline') ?>
+              </div>
+              <input
+                type="text"
+                x-model="topicSearch"
+                class="w-full pl-10 pr-3 py-2 rounded-xl border border-gray-200 text-sm bg-white focus:ring-4 focus:ring-sky-100 focus:border-sky-400 disabled:bg-gray-50 disabled:text-gray-400"
+                placeholder="Type to filter topics..."
+                :disabled="!subjectId"
+              >
+            </div>
             <p class="mt-1 text-xs text-gray-500">Tip: search by keyword, for example “bone”, “cardio”, “renal”.</p>
           </div>
 
           <div class="flex md:items-end gap-2">
             <button
               type="button"
-              class="w-full md:w-auto px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
+              class="w-full md:w-auto inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
               @click="selectedTopicIds = []"
               :disabled="selectedTopicIds.length === 0"
             >
-              Clear
+              <?= icon('x-mark', 'h-4 w-4', 'outline') ?>
+              <span>Clear</span>
             </button>
 
             <button
               type="button"
-              class="w-full md:w-auto px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
+              class="w-full md:w-auto inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-sm disabled:opacity-60"
               @click="
                 (() => {
                   const ids = filteredTopics().map(t => Number(t.id));
@@ -200,7 +234,8 @@
               :disabled="!subjectId || filteredTopics().length === 0"
               title="Adds all currently filtered topics to your selection"
             >
-              Select all filtered
+              <?= icon('check-circle', 'h-4 w-4', 'outline') ?>
+              <span>Select filtered</span>
             </button>
           </div>
         </div>
@@ -231,10 +266,12 @@
               >
                 <span class="truncate max-w-[220px]" x-text="t.label"></span>
                 <span
-                  class="inline-flex items-center justify-center h-5 w-5 rounded-full text-[11px] font-bold"
+                  class="inline-flex items-center justify-center h-5 w-5 rounded-full"
                   :class="isSelected(t.id) ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'"
-                  x-text="isSelected(t.id) ? '✓' : '+'"
-                ></span>
+                >
+                  <template x-if="isSelected(t.id)"><?= icon('check', 'h-3 w-3', 'solid') ?></template>
+                  <template x-if="!isSelected(t.id)"><?= icon('plus', 'h-3 w-3', 'solid') ?></template>
+                </span>
               </button>
             </template>
           </div>
@@ -245,8 +282,11 @@
           <input type="hidden" name="topic_ids[]" :value="tid">
         </template>
 
-        <div class="text-xs text-gray-500">
-          You must select at least one topic before you can start.
+        <div class="text-xs text-gray-500 flex items-center gap-2">
+          <?= icon('information-circle', 'h-4 w-4 text-gray-400', 'outline') ?>
+          <span>
+            You must select at least one topic before you can start.
+          </span>
         </div>
       </div>
     </section>
@@ -255,8 +295,11 @@
     <section class="rounded-2xl border border-gray-200 bg-white overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
         <div class="flex items-start justify-between gap-4">
-          <div>
+          <div class="flex items-center gap-2">
+            <?= icon('cog-6-tooth', 'h-4 w-4 text-gray-600', 'outline') ?>
             <div class="text-sm font-semibold">Quiz options</div>
+          </div>
+          <div>
             <div class="text-xs text-gray-500 mt-1">Set number of questions, scoring mode, and timer.</div>
           </div>
           <div class="text-xs text-gray-500 whitespace-nowrap">Step 3 of 3</div>
@@ -265,7 +308,10 @@
 
       <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
         <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">Number of questions</label>
+          <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-1">
+            <?= icon('list-bullet', 'h-4 w-4 text-gray-500', 'outline') ?>
+            <span>Number of questions</span>
+          </label>
           <input
             type="number"
             name="num_questions"
@@ -278,7 +324,10 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">Scoring mode</label>
+          <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-1">
+            <?= icon('scale', 'h-4 w-4 text-gray-500', 'outline') ?>
+            <span>Scoring mode</span>
+          </label>
           <select
             name="scoring_mode"
             x-model="scoringMode"
@@ -291,7 +340,10 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-gray-700 mb-1">Timer</label>
+          <label class="flex items-center gap-2 text-xs font-semibold text-gray-700 mb-1">
+            <?= icon('clock', 'h-4 w-4 text-gray-500', 'outline') ?>
+            <span>Timer</span>
+          </label>
           <select
             name="timer_seconds"
             x-model="timerSeconds"
@@ -323,8 +375,8 @@
             ? 'bg-sky-300 cursor-not-allowed'
             : 'bg-sky-600 hover:bg-sky-700'"
         >
+          <?= icon('rocket-launch', 'h-4 w-4', 'solid') ?>
           <span>Start quiz</span>
-          <span class="inline-flex h-2 w-2 rounded-full bg-white/80"></span>
         </button>
       </div>
     </section>

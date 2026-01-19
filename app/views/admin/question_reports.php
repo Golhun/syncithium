@@ -17,8 +17,6 @@ declare(strict_types=1);
 $reports = (isset($reports) && is_array($reports)) ? $reports : [];
 $status  = (string)($status ?? 'open');
 
-function has_icon(): bool { return function_exists('icon'); }
-
 // Tabs
 $tabs = [
   'open'      => 'Open',
@@ -62,11 +60,7 @@ if ($rowsJson === false) $rowsJson = '[]';
     <div class="min-w-0">
       <div class="flex items-center gap-2">
         <div class="h-9 w-9 rounded-xl bg-sky-50 ring-1 ring-sky-100 flex items-center justify-center">
-          <?php if (has_icon()): ?>
-            <?= icon('flag', 'h-5 w-5 text-sky-700', 'solid') ?>
-          <?php else: ?>
-            <span class="text-sky-700 font-semibold">QR</span>
-          <?php endif; ?>
+          <?= icon('flag', 'h-5 w-5 text-sky-700', 'solid') ?>
         </div>
         <h1 class="text-2xl font-semibold text-slate-900">Question Reports</h1>
       </div>
@@ -76,12 +70,12 @@ if ($rowsJson === false) $rowsJson = '[]';
 
       <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-          <?php if (has_icon()): ?><?= icon('circle-stack', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
+          <?= icon('circle-stack', 'h-4 w-4 text-slate-400', 'outline') ?>
           Total: <span class="font-semibold text-slate-700" id="qrTotal">0</span>
         </span>
 
         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-          <?php if (has_icon()): ?><?= icon('funnel', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
+          <?= icon('funnel', 'h-4 w-4 text-slate-400', 'outline') ?>
           Filter: <span class="font-semibold text-slate-700"><?= e($tabs[$status] ?? $status) ?></span>
         </span>
       </div>
@@ -89,7 +83,7 @@ if ($rowsJson === false) $rowsJson = '[]';
 
     <a class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition"
        href="/public/index.php?r=admin_users">
-      <?php if (has_icon()): ?><?= icon('arrow-left', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+      <?= icon('arrow-left', 'h-4 w-4 text-slate-600', 'outline') ?>
       <span class="text-sm font-medium text-slate-800">Back to Users</span>
     </a>
   </div>
@@ -103,19 +97,17 @@ if ($rowsJson === false) $rowsJson = '[]';
                <?= $active ? 'bg-slate-900 text-white ring-slate-900' : 'bg-white text-slate-800 ring-slate-200 hover:bg-slate-50' ?>"
         href="/public/index.php?r=admin_question_reports&status=<?= e($k) ?>"
       >
-        <?php if (has_icon()): ?>
-          <?php
-            $ico = match ($k) {
-              'open' => 'exclamation-circle',
-              'in_review' => 'eye',
-              'resolved' => 'check-circle',
-              'rejected' => 'x-circle',
-              'all' => 'list-bullet',
-              default => 'tag',
-            };
-          ?>
-          <?= icon($ico, 'h-4 w-4 '.($active ? 'text-white' : 'text-slate-600'), $active ? 'solid' : 'outline') ?>
-        <?php endif; ?>
+        <?php
+          $ico = match ($k) {
+            'open' => 'exclamation-circle',
+            'in_review' => 'eye',
+            'resolved' => 'check-circle',
+            'rejected' => 'x-circle',
+            'all' => 'list-bullet',
+            default => 'tag',
+          };
+        ?>
+        <?= icon($ico, 'h-4 w-4 '.($active ? 'text-white' : 'text-slate-600'), $active ? 'solid' : 'outline') ?>
         <span class="text-sm font-medium"><?= e($label) ?></span>
       </a>
     <?php endforeach; ?>
@@ -127,7 +119,7 @@ if ($rowsJson === false) $rowsJson = '[]';
     <div class="px-5 py-4 border-b border-slate-200 bg-white">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <?php if (has_icon()): ?><?= icon('table-cells', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+          <?= icon('table-cells', 'h-4 w-4 text-slate-600', 'outline') ?>
           Reports list
         </div>
 
@@ -175,7 +167,7 @@ if ($rowsJson === false) $rowsJson = '[]';
     <div class="px-5 py-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3">
       <button type="button" id="qrPrev"
               class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
-        <?php if (has_icon()): ?><?= icon('chevron-left', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+        <?= icon('chevron-left', 'h-4 w-4 text-slate-600', 'outline') ?>
         Prev
       </button>
 
@@ -187,7 +179,7 @@ if ($rowsJson === false) $rowsJson = '[]';
       <button type="button" id="qrNext"
               class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
         Next
-        <?php if (has_icon()): ?><?= icon('chevron-right', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+        <?= icon('chevron-right', 'h-4 w-4 text-slate-600', 'outline') ?>
       </button>
     </div>
   </div>

@@ -1,0 +1,15 @@
+RewriteEngine On
+Options -Indexes
+
+# Block direct access to private folders/files in project root
+RewriteRule ^(app|vendor|bin)/ - [F,L]
+RewriteRule ^\.env - [F,L]
+RewriteRule ^composer\.(json|lock)$ - [F,L]
+
+# If the requested path exists inside /public, serve it from there (CSS/JS/images)
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f [OR]
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -d
+RewriteRule ^(.*)$ public/$1 [L]
+
+# Otherwise route everything to the front controller
+RewriteRule ^ public/index.php [L]

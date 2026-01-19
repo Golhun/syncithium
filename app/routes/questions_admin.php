@@ -115,11 +115,20 @@ return [
       redirect('/public/index.php?r=admin_questions');
     }
 
-    $stmt = $db->prepare("SELECT * FROM questions WHERE id = :id LIMIT 1");
+    $stmt = $db->prepare("
+      SELECT q.*, t.name AS topic_name, s.name AS subject_name, m.code AS module_code, l.code AS level_code
+      FROM questions q
+      JOIN topics t ON t.id = q.topic_id
+      JOIN subjects s ON s.id = t.subject_id
+      JOIN modules m ON m.id = s.module_id
+      JOIN levels l ON l.id = m.level_id
+      WHERE q.id = :id
+      LIMIT 1
+    ");
     $stmt->execute([':id' => $id]);
-    $question = $stmt->fetch();
+    $row = $stmt->fetch();
 
-    if (!$question) {
+    if (!$row) {
       flash_set('error', 'Question not found.');
       redirect('/public/index.php?r=admin_questions');
     }
@@ -146,7 +155,7 @@ return [
       }
 
       $hash = q_hash($qt, $a, $b, $c, $d);
-      $topicId = (int)$question['topic_id'];
+      $topicId = (int)$row['topic_id'];
 
       // Prevent duplicates under same topic (excluding this question)
       $stmt = $db->prepare("
@@ -191,7 +200,7 @@ return [
 
     render('admin/question_edit', [
       'title' => 'Edit Question',
-      'question' => $question,
+      'row' => $row,
     ]);
   },
 

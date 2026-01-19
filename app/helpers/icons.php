@@ -18,8 +18,13 @@ if (!function_exists('hi_svg')) {
     {
         $variant = ($variant === 'solid') ? 'solid' : 'outline';
 
-        // app/helpers -> app -> project root -> public/...
-        $base = __DIR__ . '/../../public/assets/icons/heroicons/24/' . $variant . '/';
+        // Use the PUBLIC_ROOT constant defined in index.php for a portable path.
+        // This avoids hardcoding the 'public' directory name.
+        if (!defined('PUBLIC_ROOT')) {
+            // Fallback for environments where index.php might not be the entry point (e.g. CLI scripts)
+            define('PUBLIC_ROOT', __DIR__ . '/../../public');
+        }
+        $base = PUBLIC_ROOT . '/assets/icons/heroicons/24/' . $variant . '/';
         $path = $base . $name . '.svg';
 
         if (!is_file($path)) {
