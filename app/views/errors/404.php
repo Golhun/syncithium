@@ -15,29 +15,16 @@ declare(strict_types=1);
     <title><?= e($code ?? '404') ?> - <?= e($title ?? 'Not Found') ?></title>
     <link rel="stylesheet" href="/public/assets/css/tailwind.min.css">
 </head>
-<body class="bg-slate-50">
-    <main class="min-h-screen w-full flex flex-col justify-center items-center px-6 py-12">
-        <div class="max-w-lg text-center">
-            <div class="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-sky-100 ring-4 ring-sky-50 mb-6">
-                <?= icon('question-mark-circle', 'h-8 w-8 text-sky-600', 'solid') ?>
-            </div>
-            <h1 class="text-6xl font-bold text-slate-800 tracking-tighter"><?= e($code) ?></h1>
-            <h2 class="mt-2 text-2xl font-semibold text-slate-900"><?= e($title) ?></h2>
-            <p class="mt-4 text-slate-600">
-                <?= e($joke) ?>
-            </p>
-            <p class="mt-2 text-xs text-slate-500">
-                (<?= e($message) ?>)
-            </p>
-            <div class="mt-8">
-                <a href="/public/index.php"
-                   class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold
-                          hover:opacity-95 active:opacity-90 transition focus:outline-none focus:ring-4 focus:ring-sky-100">
-                    <?= icon('home', 'h-4 w-4 text-white', 'solid') ?>
-                    <span>Return to Homepage</span>
-                </a>
-            </div>
+<body class="bg-white">
+    <section class="bg-white">
+        <div class="py-8 px-4 mx-auto max-w-screen-xl lg:py-16 lg:px-6">
+            <div class="mx-auto max-w-screen-sm text-center">
+                <h1 class="mb-4 text-7xl tracking-tight font-extrabold lg:text-9xl text-sky-600"><?= e($code) ?></h1>
+                <p class="mb-4 text-3xl tracking-tight font-bold text-gray-900 md:text-4xl"><?= e($title) ?></p>
+                <p class="mb-4 text-lg font-light text-gray-500"><?= e($message) ?> <br><span class="italic"><?= e($joke) ?></span></p>
+                <a href="/public/index.php" class="inline-flex text-white bg-sky-600 hover:bg-sky-800 focus:ring-4 focus:outline-none focus:ring-sky-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center my-4">Back to Homepage</a>
+            </div>   
         </div>
-    </main>
+    </section>
 </body>
 </html>

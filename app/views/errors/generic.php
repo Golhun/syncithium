@@ -12,23 +12,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title><?php echo e($title ?? 'Error'); ?> (<?php echo e($code ?? ''); ?>)</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;background:#f8fafc;color:#0f172a;margin:0;padding:40px}
-    .wrap{max-width:760px;margin:0 auto;background:#fff;padding:28px;border-radius:8px;box-shadow:0 6px 18px rgba(2,6,23,.08); text-align: center;}
-    h1{margin:0 0 8px;font-size:22px}
-    p{margin:6px 0;color:#334155}
-    .code{font-weight:700;color:#ef4444; font-size: 4rem; display: block; margin-bottom: 1rem;}
-    .joke{margin-top:18px;color:#64748b;font-style:italic}
-    a { display: inline-block; margin-top: 2rem; background: #0f172a; color: #fff; padding: 10px 20px; border-radius: 8px; text-decoration: none; }
-  </style>
+  <link rel="stylesheet" href="/public/assets/css/tailwind.min.css">
 </head>
-<body>
-  <div class="wrap">
-    <span class="code"><?php echo e($code ?? ''); ?></span>
-    <h1><?php echo e($title ?? 'Error'); ?></h1>
-    <p><?php echo e($message ?? 'An unexpected error occurred.'); ?></p>
-    <p class="joke"><?php echo e($joke ?? 'Please contact the site administrator.'); ?></p>
-    <a href="/public/index.php">Return to Homepage</a>
-  </div>
+<body class="bg-white">
+    <section class="bg-white">
+        <div class="py-8 px-4 mx-auto max-w-screen-xl lg:py-16 lg:px-6">
+            <div class="mx-auto max-w-screen-sm text-center">
+                <h1 class="mb-4 text-7xl tracking-tight font-extrabold lg:text-9xl text-sky-600"><?= e($code ?? 'Error') ?></h1>
+                <p class="mb-4 text-3xl tracking-tight font-bold text-gray-900 md:text-4xl"><?= e($title ?? 'Error') ?></p>
+                <p class="mb-4 text-lg font-light text-gray-500"><?= e($message ?? 'An unexpected error occurred.') ?> <br><span class="italic"><?= e($joke ?? '') ?></span></p>
+                <a href="/public/index.php" class="inline-flex text-white bg-sky-600 hover:bg-sky-800 focus:ring-4 focus:outline-none focus:ring-sky-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center my-4">Back to Homepage</a>
+            </div>   
+        </div>
+    </section>
 </body>
 </html>

@@ -231,12 +231,6 @@ function badge(string $text, string $tone = 'gray'): string
                     <?php endif; ?>
                 </div>
 
-                <?php if ($isAdmin): ?>
-                    <div class="text-xs text-gray-500 flex items-center gap-2">
-                        <?= hi_svg('information-circle', 'outline', 'h-4 w-4 text-gray-400') ?>
-                        <span>Admins can manage content and also take quizzes as normal users.</span>
-                    </div>
-                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>

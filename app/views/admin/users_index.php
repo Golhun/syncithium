@@ -43,10 +43,6 @@ if ($usersJson === false) $usersJson = '[]';
           <span><span x-text="allUsers.length"></span> user(s)</span>
         </span>
 
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-          <?= icon('shield-check', 'h-4 w-4 text-slate-400', 'outline') ?>
-          <span>Resets require next-login password change</span>
-        </span>
       </div>
     </div>
 
@@ -89,8 +85,13 @@ if ($usersJson === false) $usersJson = '[]';
           </p>
         </div>
 
-        <div class="flex gap-2 sm:justify-end">
-          <div class="text-xs text-slate-500" x-text="`Showing ${filteredUsers.length} of ${allUsers.length}`"></div>
+        <div class="flex items-center gap-2 sm:justify-end">
+          <span class="text-xs text-slate-500 hidden sm:inline">Rows</span>
+          <select x-model.number="pageSize" class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </select>
         </div>
       </div>
     </div>
@@ -111,13 +112,13 @@ if ($usersJson === false) $usersJson = '[]';
     </div>
 
     <div class="divide-y divide-slate-200">
-      <template x-if="filteredUsers.length === 0">
+      <template x-if="pagedUsers.length === 0">
         <div class="p-6 text-slate-600 text-sm">
           No users found for your search.
         </div>
       </template>
 
-      <template x-for="u in filteredUsers" :key="u.id">
+      <template x-for="u in pagedUsers" :key="u.id">
         <div class="p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 user-card">
           <!-- Left: User info -->
           <div class="flex items-start gap-4 min-w-0">
@@ -196,6 +197,25 @@ if ($usersJson === false) $usersJson = '[]';
         </div>
       </template>
     </div>
+
+    <!-- Pagination Footer -->
+    <div class="px-5 py-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3">
+      <button type="button" @click="prev()" :disabled="page <= 1"
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        <?= icon('chevron-left', 'h-4 w-4 text-slate-600', 'outline') ?>
+        Prev
+      </button>
+
+      <div class="text-xs text-slate-500">
+        Showing <span class="font-semibold text-slate-700" x-text="showFrom"></span> to <span class="font-semibold text-slate-700" x-text="showTo"></span> of <span class="font-semibold text-slate-700" x-text="filteredCount"></span>
+      </div>
+
+      <button type="button" @click="next()" :disabled="page >= totalPages"
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
+        Next
+        <?= icon('chevron-right', 'h-4 w-4 text-slate-600', 'outline') ?>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -208,9 +228,16 @@ if ($usersJson === false) $usersJson = '[]';
 function usersIndex() {
   return {
     allUsers: [],
-    filteredUsers: [],
+    pagedUsers: [],
     search: '',
     adminId: null,
+    page: 1,
+    pageSize: 10,
+    totalPages: 1,
+    filteredCount: 0,
+    showFrom: 0,
+    showTo: 0,
+
     init(adminId) {
       this.adminId = adminId;
       const payload = document.getElementById('users-payload');
@@ -218,20 +245,35 @@ function usersIndex() {
         try { this.allUsers = JSON.parse(payload.textContent); }
         catch (e) { this.allUsers = []; }
       }
-      this.filter();
+      this.compute();
 
-      this.$watch('search', () => this.filter());
+      this.$watch('search', () => { this.page = 1; this.compute(); });
+      this.$watch('pageSize', () => { this.page = 1; this.compute(); });
+      this.$watch('page', () => this.compute());
     },
-    filter() {
+    compute() {
       const q = this.search.trim().toLowerCase();
-      if (!q) {
-        this.filteredUsers = this.allUsers;
-        return;
+      let filtered = this.allUsers;
+
+      if (q) {
+        filtered = this.allUsers.filter(u => u.email.toLowerCase().includes(q));
       }
-      this.filteredUsers = this.allUsers.filter(u => {
-        return u.email.toLowerCase().includes(q);
-      });
-    }
+
+      this.filteredCount = filtered.length;
+      this.totalPages = Math.max(1, Math.ceil(this.filteredCount / this.pageSize));
+
+      if (this.page > this.totalPages) this.page = this.totalPages;
+      if (this.page < 1) this.page = 1;
+
+      const start = (this.page - 1) * this.pageSize;
+      const end = start + this.pageSize;
+      this.pagedUsers = filtered.slice(start, end);
+
+      this.showFrom = this.filteredCount === 0 ? 0 : start + 1;
+      this.showTo = Math.min(end, this.filteredCount);
+    },
+    prev() { if (this.page > 1) this.page--; },
+    next() { if (this.page < this.totalPages) this.page++; }
   }
 }
 </script>

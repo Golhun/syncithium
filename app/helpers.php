@@ -76,15 +76,44 @@ function http_json(array $payload, int $code = 200): void {
  * @param int $code The HTTP status code (e.g., 404, 403).
  * @param string $title The main title for the error (e.g., 'Page Not Found').
  * @param string $message A technical or straightforward description of the error.
- * @param string $joke A user-friendly, humorous, and relevant message.
+ * @param string|null $joke A user-friendly, humorous, and relevant message. If null, a random one is picked.
  * @return never
  */
-function render_error_page(int $code, string $title, string $message, string $joke): void
+function render_error_page(int $code, string $title, string $message, ?string $joke = null): void
 {
     http_response_code($code);
 
     // Ensure helpers are available for the standalone error page
     require_once __DIR__ . '/helpers/icons.php';
+
+    if ($joke === null) {
+        $jokes = [
+            403 => [
+                "Teachers' lounge only. Students strictly prohibited.",
+                "You need a hall pass to be here.",
+                "Access Denied. Did you forget your homework?",
+                "This section is for the cool kids (admins) only.",
+                "Principal's office. You probably don't want to be here anyway.",
+            ],
+            404 => [
+                "This page is playing hooky. We'll report it to the principal.",
+                "It seems this page failed its exams and was held back.",
+                "We searched the library and the lab, but this page is missing.",
+                "This page is currently in detention.",
+                "Homework ate the page? That's a new one.",
+            ],
+            500 => [
+                "The dog ate our server configuration.",
+                "Math error: We divided by zero.",
+                "Pop quiz! The server wasn't ready.",
+                "School's out? No, just a server error.",
+                "We're having a fire drill. Please wait.",
+            ]
+        ];
+        
+        $set = $jokes[$code] ?? $jokes[500];
+        $joke = $set[array_rand($set)];
+    }
 
     // Data for the view
     $data = compact('code', 'title', 'message', 'joke');

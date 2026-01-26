@@ -48,8 +48,7 @@ if ($isAdminRoute) {
         render_error_page(
             403,
             'Access Denied',
-            'You do not have permission to access this page.',
-            'Whoops! This area is for authorized personnel only, like a teachers\' lounge. Your hall pass doesn\'t grant access here.'
+            'You do not have permission to access this page.'
         );
     }
 }
@@ -59,8 +58,7 @@ if (!isset($routes[$route]) || !is_callable($routes[$route])) {
     render_error_page(
         404,
         'Page Not Found',
-        'The page you are looking for does not exist or has been moved.',
-        'Error 404: This page seems to have graduated and left the campus. Let\'s get you back to the library.'
+        'The page you are looking for does not exist or has been moved.'
     );
 }
 
