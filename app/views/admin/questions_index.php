@@ -1,404 +1,336 @@
 <?php
-/** @var array $questions */
-/** @var array $filters */
+/**
+ * @var array $questions
+ * @var array $filters
+ * @var array $admin
+ */
 
-$questions = (isset($questions) && is_array($questions)) ? $questions : [];
-$filters = (isset($filters) && is_array($filters)) ? $filters : ['q' => '', 'status' => '', 'topic_id' => 0];
+// Helper to prevent crashes if global icon() isn't loaded
+function has_icon_q(): bool { return function_exists('icon'); }
 
-function h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
-function has_icon_helper(): bool { return function_exists('icon'); }
+$questionsUi = array_map(function($q) {
+    return [
+        'id' => (int)$q['id'],
+        'q' => (string)$q['question_text'],
+        'co' => (string)$q['correct_option'],
+        'st' => (string)$q['status'],
+        'top' => (string)$q['topic_name'],
+        'sub' => (string)$q['subject_name'],
+        'mod' => (string)$q['module_code'],
+        'lev' => (string)$q['level_code'],
+    ];
+}, $questions ?? []);
 
-$qSearch = (string)($filters['q'] ?? '');
-$statusFilter = (string)($filters['status'] ?? '');
-$topicIdFilter = (int)($filters['topic_id'] ?? 0);
-
-// Minimal payload for client-side pagination and rendering.
-// We keep strings safe for JSON and escape output at render time.
-$uiRows = array_map(static function ($q) {
-  return [
-    'id' => (int)($q['id'] ?? 0),
-    'level_code' => (string)($q['level_code'] ?? ''),
-    'module_code' => (string)($q['module_code'] ?? ''),
-    'subject_name' => (string)($q['subject_name'] ?? ''),
-    'topic_name' => (string)($q['topic_name'] ?? ''),
-    'topic_id' => (int)($q['topic_id'] ?? 0),
-
-    'question_text' => (string)($q['question_text'] ?? ''),
-    'option_a' => (string)($q['option_a'] ?? ''),
-    'option_b' => (string)($q['option_b'] ?? ''),
-    'option_c' => (string)($q['option_c'] ?? ''),
-    'option_d' => (string)($q['option_d'] ?? ''),
-    'correct_option' => (string)($q['correct_option'] ?? ''),
-
-    'status' => (string)($q['status'] ?? ''),
-    'created_at' => (string)($q['created_at'] ?? ''),
-  ];
-}, $questions);
-
-$rowsJson = json_encode(
-  $uiRows,
-  JSON_UNESCAPED_SLASHES
-  | JSON_UNESCAPED_UNICODE
-  | JSON_HEX_TAG
-  | JSON_HEX_AMP
-  | JSON_HEX_APOS
-  | JSON_HEX_QUOT
-);
-if ($rowsJson === false) $rowsJson = '[]';
+$json = json_encode($questionsUi, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
+<style>[x-cloak] { display: none !important; }</style>
 
-<div class="max-w-6xl mx-auto" id="qbRoot">
-  <script type="application/json" id="qbPayload"><?= $rowsJson ?></script>
+<?php require_once(__DIR__ . '/_alertify.php'); ?>
 
-  <!-- Header -->
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
-    <div class="min-w-0">
-      <div class="flex items-center gap-2">
-        <div class="h-9 w-9 rounded-xl bg-sky-50 ring-1 ring-sky-100 flex items-center justify-center">
-          <?php if (has_icon_helper()): ?>
-            <?= icon('book-open', 'h-5 w-5 text-sky-700', 'solid') ?>
-          <?php else: ?>
-            <span class="text-sky-700 font-semibold">QB</span>
-          <?php endif; ?>
-        </div>
-        <h1 class="text-2xl font-semibold text-slate-900">Question Bank</h1>
-      </div>
+<div x-data="questionsAdmin()" x-init="init()">
+    <script type="application/json" id="questionsPayload"><?= $json ?: '[]' ?></script>
 
-      <p class="text-sm text-slate-600 mt-2">
-        Manage questions, verify taxonomy, and keep content clean for quiz selection.
-      </p>
-
-      <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-          <?php if (has_icon_helper()): ?><?= icon('circle-stack', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
-          Total: <span class="font-semibold text-slate-700" id="qbTotal">0</span>
-        </span>
-
-        <?php if ($statusFilter !== ''): ?>
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-            <?php if (has_icon_helper()): ?><?= icon('funnel', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
-            Status: <span class="font-semibold text-slate-700"><?= h($statusFilter) ?></span>
-          </span>
-        <?php endif; ?>
-
-        <?php if ($topicIdFilter > 0): ?>
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-            <?php if (has_icon_helper()): ?><?= icon('tag', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
-            Topic ID: <span class="font-semibold text-slate-700"><?= (int)$topicIdFilter ?></span>
-          </span>
-        <?php endif; ?>
-      </div>
-    </div>
-
-    <div class="flex flex-wrap gap-2 sm:justify-end">
-      <a class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition"
-         href="/public/index.php?r=admin_questions_import">
-        <?php if (has_icon_helper()): ?><?= icon('arrow-up-tray', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
-        <span class="text-sm font-medium text-slate-800">Import CSV</span>
-      </a>
-    </div>
-  </div>
-
-  <!-- Filters (single clean surface, not multiple boxes) -->
-  <div class="bg-white rounded-2xl ring-1 ring-slate-200 overflow-hidden mb-5">
-    <div class="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
-      <div class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <?php if (has_icon_helper()): ?><?= icon('adjustments-horizontal', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
-        Filters
-      </div>
-
-      <div class="text-xs text-slate-500">
-        Tip: Keep filters narrow for faster review.
-      </div>
-    </div>
-
-    <div class="p-5">
-      <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <input type="hidden" name="r" value="admin_questions">
-
-        <div class="md:col-span-2">
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Search</label>
-          <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-              <?php if (has_icon_helper()): ?><?= icon('magnifying-glass', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
+    <!-- Main Content Wrapper (Animated) -->
+    <div class="max-w-6xl mx-auto" id="q-content">
+    
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2">
+                <div class="h-9 w-9 rounded-xl bg-sky-50 ring-1 ring-sky-100 flex items-center justify-center">
+                    <?php if (has_icon_q()): ?>
+                        <?= icon('question-mark-circle', 'h-5 w-5 text-sky-700', 'solid') ?>
+                    <?php else: ?>
+                        <span class="text-sky-700 font-semibold">Q</span>
+                    <?php endif; ?>
+                </div>
+                <h1 class="text-2xl font-semibold text-slate-900">Question Bank</h1>
             </div>
-            <input class="w-full rounded-xl ring-1 ring-slate-200 bg-white pl-9 pr-3 py-2.5 text-sm
-                          focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition"
-                   name="q"
-                   value="<?= h((string)($filters['q'] ?? '')) ?>"
-                   placeholder="Search question text">
-          </div>
+            <p class="text-sm text-slate-600 mt-2">Manage and organize your quiz questions.</p>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
+                    <?php if (has_icon_q()): ?><?= icon('circle-stack', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
+                    Total: <span class="font-semibold text-slate-700" x-text="all.length"></span>
+                </span>
+                
+                <!-- Selection counter -->
+                <span x-show="selected.length > 0" x-transition class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-sky-200 bg-sky-50 text-sky-700">
+                    <span class="font-semibold" x-text="selected.length"></span> selected
+                </span>
+            </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
-          <select class="w-full rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2.5 text-sm
-                         focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition"
-                  name="status">
-            <option value="">All statuses</option>
-            <option value="active" <?= (($filters['status'] ?? '') === 'active') ? 'selected' : '' ?>>Active</option>
-            <option value="inactive" <?= (($filters['status'] ?? '') === 'inactive') ? 'selected' : '' ?>>Inactive</option>
-          </select>
+        <div class="flex flex-wrap gap-2 sm:justify-end">
+             <!-- Bulk Delete (Visible when selected) -->
+            <div x-show="selected.length > 0" x-transition>
+                <form method="post" action="/public/index.php?r=admin_questions" @submit.prevent="initiateDelete($event.target, selected)">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="bulk_delete">
+                    <template x-for="id in selected" :key="id">
+                        <input type="hidden" name="ids[]" :value="id">
+                    </template>
+                    <button type="submit" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 transition">
+                        <?php if (has_icon_q()): ?><?= icon('trash', 'h-4 w-4', 'outline') ?><?php endif; ?>
+                        <span class="text-sm font-medium">Delete Selected</span>
+                    </button>
+                </form>
+            </div>
+
+            <a href="/public/index.php?r=admin_questions_import" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition">
+                <?php if (has_icon_q()): ?><?= icon('arrow-up-tray', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+                <span class="text-sm font-medium text-slate-800">Import</span>
+            </a>
         </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">Topic ID (optional)</label>
-          <input class="w-full rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2.5 text-sm
-                        focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition"
-                 name="topic_id"
-                 value="<?= (int)($filters['topic_id'] ?? 0) ?>"
-                 placeholder="e.g., 12">
-        </div>
-
-        <div class="md:col-span-4 flex items-center gap-2 pt-1">
-          <button class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold
-                         hover:opacity-95 active:opacity-90 transition focus:outline-none focus:ring-4 focus:ring-sky-100"
-                  type="submit">
-            <?php if (has_icon_helper()): ?><?= icon('funnel', 'h-4 w-4 text-white', 'solid') ?><?php endif; ?>
-            Apply filters
-          </button>
-
-          <a class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition"
-             href="/public/index.php?r=admin_questions">
-            <?php if (has_icon_helper()): ?><?= icon('x-mark', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
-            Clear
-          </a>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- List surface -->
-  <div class="bg-white rounded-2xl ring-1 ring-slate-200 overflow-hidden">
-    <!-- Toolbar -->
-    <div class="px-5 py-4 border-b border-slate-200 bg-white">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <?php if (has_icon_helper()): ?><?= icon('list-bullet', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
-          Questions
-        </div>
-
-        <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <div class="text-xs text-slate-500">
-            Showing <span class="font-semibold text-slate-700" id="qbShowFrom">0</span>
-            to <span class="font-semibold text-slate-700" id="qbShowTo">0</span>
-            of <span class="font-semibold text-slate-700" id="qbFiltered">0</span>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-500 hidden sm:inline">Rows</span>
-            <select id="qbPageSize"
-                    class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2 text-sm
-                           focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition">
-              <option value="10">10</option>
-              <option value="20" selected>20</option>
-              <option value="50">50</option>
-            </select>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- Content -->
-    <div id="qbList" class="divide-y divide-slate-200"></div>
+    <!-- Main Content -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        
+        <!-- Toolbar -->
+        <div class="px-5 py-4 border-b border-slate-200 bg-white">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <?php if (has_icon_q()): ?><?= icon('list-bullet', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+                    Questions
+                </div>
 
-    <!-- Pagination -->
-    <div class="px-5 py-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3">
-      <button type="button" id="qbPrev"
-              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
-        <?php if (has_icon_helper()): ?><?= icon('chevron-left', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
-        Prev
-      </button>
+                <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+                    <!-- Search -->
+                    <div class="relative">
+                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <?php if (has_icon_q()): ?><?= icon('magnifying-glass', 'h-4 w-4 text-slate-400', 'outline') ?><?php endif; ?>
+                        </div>
+                        <input type="text" x-model.debounce.250ms="search"
+                               class="w-full sm:w-72 rounded-xl ring-1 ring-slate-200 bg-white pl-9 pr-3 py-2 text-sm
+                                      focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition"
+                               placeholder="Search question, topic...">
+                    </div>
 
-      <div class="text-xs text-slate-500">
-        Page <span class="font-semibold text-slate-700" id="qbPage">1</span>
-        of <span class="font-semibold text-slate-700" id="qbPages">1</span>
-      </div>
+                    <!-- Status Filter -->
+                    <select x-model="statusFilter" class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
 
-      <button type="button" id="qbNext"
-              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
-        Next
-        <?php if (has_icon_helper()): ?><?= icon('chevron-right', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
-      </button>
+                    <!-- Page size -->
+                    <div class="flex items-center gap-2">
+                        <select x-model.number="pageSize"
+                                class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2 text-sm
+                                       focus:outline-none focus:ring-4 focus:ring-sky-100 focus:border-sky-400 transition">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3 text-xs text-slate-500 flex items-center justify-between gap-3">
+                <span>
+                    Showing <span class="font-semibold text-slate-700" x-text="showFrom"></span>
+                    to <span class="font-semibold text-slate-700" x-text="showTo"></span>
+                    of <span class="font-semibold text-slate-700" x-text="filteredCount"></span>
+                </span>
+
+                <button type="button" @click="search=''; statusFilter=''; page=1;"
+                        class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-slate-900 transition" 
+                        x-show="search.length > 0 || statusFilter.length > 0" x-cloak>
+                    <?php if (has_icon_q()): ?><?= icon('x-circle', 'h-4 w-4', 'outline') ?><?php endif; ?>
+                    Clear filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="px-4 py-3 w-10">
+                            <input type="checkbox" x-model="allSelected" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                        </th>
+                        <th class="p-3 w-1/2">Question</th>
+                        <th class="p-3">Taxonomy</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <template x-if="paged.length === 0">
+                        <tr>
+                            <td class="p-12 text-center text-slate-500" colspan="5">
+                                No questions found.
+                            </td>
+                        </tr>
+                    </template>
+                    
+                    <template x-for="row in paged" :key="row.id">
+                        <tr class="hover:bg-slate-50/50 transition group">
+                            <td class="p-3 align-top">
+                                <input type="checkbox" :value="row.id" x-model="selected" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500 mt-1">
+                            </td>
+                            <td class="p-3 align-top">
+                                <div class="font-medium text-slate-900 line-clamp-2 mb-1" x-text="row.q" :title="row.q"></div>
+                                <div class="text-xs text-slate-500">
+                                    Correct: <span class="font-mono font-bold text-slate-700 bg-slate-100 px-1 rounded" x-text="row.co"></span>
+                                </div>
+                            </td>
+                            <td class="p-3 align-top">
+                                <div class="flex flex-col gap-0.5 text-xs text-slate-600">
+                                    <span class="font-medium text-slate-900" x-text="row.top"></span>
+                                    <span x-text="row.sub"></span>
+                                    <span class="text-slate-400"><span x-text="row.mod"></span> &bull; <span x-text="row.lev"></span></span>
+                                </div>
+                            </td>
+                            <td class="p-3 align-top">
+                                <form method="post" action="/public/index.php?r=admin_questions">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="toggle_status">
+                                    <input type="hidden" name="question_id" :value="row.id">
+                                    <button type="submit" 
+                                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-sky-500"
+                                            :class="row.st === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'">
+                                        <span x-text="row.st.charAt(0).toUpperCase() + row.st.slice(1)"></span>
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="p-3 align-top text-right whitespace-nowrap">
+                                <div class="flex items-center justify-end gap-1">
+                                    <a :href="'/public/index.php?r=admin_question_edit&id=' + row.id" 
+                                       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition" title="Edit">
+                                        <?php if (has_icon_q()): ?><?= icon('pencil-square', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+                                        <span class="text-sm font-medium text-slate-800 hidden sm:inline">Edit</span>
+                                    </a>
+                                    <form method="post" action="/public/index.php?r=admin_question_delete" 
+                                          @submit.prevent="initiateDelete($event.target, [row.id])">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="id" :value="row.id">
+                                        <button type="submit" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-rose-50 hover:ring-rose-200 transition" title="Delete">
+                                            <?php if (has_icon_q()): ?><?= icon('trash', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+                                            <span class="text-sm font-medium text-slate-800 hidden sm:inline">Delete</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="px-5 py-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3" x-show="filteredCount > 0">
+            <button type="button" @click="prev()" :disabled="page <= 1"
+                    class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <?php if (has_icon_q()): ?><?= icon('chevron-left', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+                Prev
+            </button>
+
+            <div class="text-xs text-slate-500">
+                Showing <span class="font-semibold text-slate-700" x-text="showFrom"></span> to <span class="font-semibold text-slate-700" x-text="showTo"></span> of <span class="font-semibold text-slate-700" x-text="filteredCount"></span>
+            </div>
+
+            <button type="button" @click="next()" :disabled="page >= totalPages"
+                    class="inline-flex items-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                Next
+                <?php if (has_icon_q()): ?><?= icon('chevron-right', 'h-4 w-4 text-slate-600', 'outline') ?><?php endif; ?>
+            </button>
+        </div>
     </div>
-  </div>
+    
+    </div> <!-- End Content Wrapper -->
+
 </div>
 
-<style>
-/* lightweight motion, material-ish */
-.qb-enter { animation: qbFadeUp .16s ease-out 1; }
-@keyframes qbFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.qb-hl { background: rgba(14,165,233,.12); border-radius: .25rem; padding: 0 .15rem; }
-</style>
-
 <script>
-(function () {
-  const payloadEl = document.getElementById('qbPayload');
-  const listEl = document.getElementById('qbList');
+function questionsAdmin() {
+    return {
+        all: [],
+        search: '',
+        statusFilter: '',
+        page: 1,
+        pageSize: 20,
+        selected: [],
+        
+        // Computed
+        filtered: [],
+        paged: [],
+        filteredCount: 0,
+        totalPages: 1,
+        showFrom: 0,
+        showTo: 0,
 
-  const pageSizeEl = document.getElementById('qbPageSize');
-  const prevBtn = document.getElementById('qbPrev');
-  const nextBtn = document.getElementById('qbNext');
+        init() {
+            try {
+                this.all = JSON.parse(document.getElementById('questionsPayload').textContent);
+            } catch(e) { this.all = []; }
+            
+            this.$watch('search', () => { this.page = 1; this.compute(); });
+            this.$watch('statusFilter', () => { this.page = 1; this.compute(); });
+            this.$watch('pageSize', () => { this.page = 1; this.compute(); });
+            this.$watch('page', () => this.compute());
+            
+            this.compute();
+            
+            const content = document.getElementById('q-content');
+            if (content) content.classList.add('animate-[fadeInUp_.18s_ease-out_1]');
+        },
 
-  const totalEl = document.getElementById('qbTotal');
-  const filteredEl = document.getElementById('qbFiltered');
-  const showFromEl = document.getElementById('qbShowFrom');
-  const showToEl = document.getElementById('qbShowTo');
-  const pageEl = document.getElementById('qbPage');
-  const pagesEl = document.getElementById('qbPages');
+        compute() {
+            const q = this.search.toLowerCase().trim();
+            const s = this.statusFilter;
+            
+            this.filtered = this.all.filter(item => {
+                if (s && item.st !== s) return false;
+                if (q) {
+                    return item.q.toLowerCase().includes(q) || 
+                           item.top.toLowerCase().includes(q) || 
+                           item.sub.toLowerCase().includes(q);
+                }
+                return true;
+            });
 
-  let all = [];
-  try { all = JSON.parse(payloadEl?.textContent || '[]'); } catch (e) { all = []; }
+            this.filteredCount = this.filtered.length;
+            this.totalPages = Math.ceil(this.filteredCount / this.pageSize) || 1;
+            
+            if (this.page > this.totalPages) this.page = this.totalPages;
+            if (this.page < 1) this.page = 1;
 
-  // Server filters are already applied by backend. Client pagination works on the result set.
-  let page = 1;
-  let pageSize = parseInt(pageSizeEl?.value || '20', 10) || 20;
+            const start = (this.page - 1) * this.pageSize;
+            this.paged = this.filtered.slice(start, start + this.pageSize);
+            
+            this.showFrom = this.filteredCount === 0 ? 0 : start + 1;
+            this.showTo = Math.min(start + this.pageSize, this.filteredCount);
+        },
 
-  // Highlight search term (from server filter "q")
-  const rawQuery = <?= json_encode((string)$qSearch, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;
-  const hlQuery = String(rawQuery || '').trim();
+        prev() { if (this.page > 1) this.page--; },
+        next() { if (this.page < this.totalPages) this.page++; },
+        
+        get allSelected() {
+            return this.paged.length > 0 && this.paged.every(row => this.selected.includes(row.id));
+        },
+        set allSelected(value) {
+            if (value) {
+                const newIds = this.paged.map(row => row.id);
+                this.selected = [...new Set([...this.selected, ...newIds])];
+            } else {
+                const pagedIds = this.paged.map(row => row.id);
+                this.selected = this.selected.filter(id => !pagedIds.includes(id));
+            }
+        },
 
-  function escapeHtml(s) {
-    return String(s ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
-  }
+        initiateDelete(formEl, ids) {
+            const msg = ids.length > 1 
+                ? `Are you sure you want to delete ${ids.length} questions?` 
+                : 'Are you sure you want to delete this question?';
 
-  function highlight(text) {
-    const t = String(text ?? '');
-    if (!hlQuery) return escapeHtml(t);
-    const q = hlQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(q, 'ig');
-    return escapeHtml(t).replace(re, (m) => `<span class="qb-hl">${m}</span>`);
-  }
-
-  function statusChip(status) {
-    const s = String(status || '').toLowerCase();
-    const base = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ring-1';
-    if (s === 'active') return `<span class="${base} ring-emerald-200 bg-emerald-50 text-emerald-900">Active</span>`;
-    if (s === 'inactive') return `<span class="${base} ring-rose-200 bg-rose-50 text-rose-900">Inactive</span>`;
-    return `<span class="${base} ring-slate-200 bg-white text-slate-700">${escapeHtml(status)}</span>`;
-  }
-
-  function renderRow(q) {
-    const taxonomy = `L${q.level_code} , ${q.module_code} , ${q.subject_name} , ${q.topic_name}`;
-    const correct = String(q.correct_option || '').toUpperCase();
-
-    // Note: the Edit link is GET, Toggle is a POST form. We preserve your endpoints.
-    const editHref = `/public/index.php?r=admin_question_edit&id=${encodeURIComponent(q.id)}`;
-
-    return `
-      <div class="p-5 qb-enter">
-        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-                ${escapeHtml(taxonomy)}
-              </span>
-              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ring-slate-200 bg-white">
-                Topic ID: <span class="font-semibold text-slate-700">${escapeHtml(q.topic_id)}</span>
-              </span>
-              ${statusChip(q.status)}
-              <span class="text-xs text-slate-500">Created: ${escapeHtml(q.created_at)}</span>
-            </div>
-
-            <div class="mt-3 text-slate-900 font-semibold leading-snug">
-              ${highlight(q.question_text)}
-            </div>
-
-            <div class="mt-3 grid sm:grid-cols-2 gap-2 text-sm text-slate-700">
-              <div class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2">
-                <span class="text-xs font-semibold text-slate-500">A</span>
-                <div class="mt-1">${highlight(q.option_a)}</div>
-              </div>
-              <div class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2">
-                <span class="text-xs font-semibold text-slate-500">B</span>
-                <div class="mt-1">${highlight(q.option_b)}</div>
-              </div>
-              <div class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2">
-                <span class="text-xs font-semibold text-slate-500">C</span>
-                <div class="mt-1">${highlight(q.option_c)}</div>
-              </div>
-              <div class="rounded-xl ring-1 ring-slate-200 bg-white px-3 py-2">
-                <span class="text-xs font-semibold text-slate-500">D</span>
-                <div class="mt-1">${highlight(q.option_d)}</div>
-              </div>
-            </div>
-
-            <div class="mt-3 text-xs text-slate-600">
-              Correct option: <span class="font-semibold text-slate-900">${escapeHtml(correct)}</span>
-            </div>
-          </div>
-
-          <div class="flex md:flex-col gap-2 md:items-end shrink-0">
-            <a class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition"
-               href="${editHref}">
-              Edit
-            </a>
-
-            <form method="post" class="inline-block">
-              <?= str_replace("\n","",csrf_field()) ?>
-              <input type="hidden" name="question_id" value="${escapeHtml(q.id)}">
-              <button class="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl ring-1 ring-slate-200 bg-white hover:bg-slate-50 transition"
-                      name="action" value="toggle_status" type="submit">
-                Toggle status
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function recalcAndRender() {
-    const total = all.length;
-    const pages = Math.max(1, Math.ceil(total / pageSize));
-    if (page > pages) page = pages;
-    if (page < 1) page = 1;
-
-    const start = (page - 1) * pageSize;
-    const slice = all.slice(start, start + pageSize);
-
-    if (totalEl) totalEl.textContent = String(total);
-    if (filteredEl) filteredEl.textContent = String(total);
-
-    if (showFromEl) showFromEl.textContent = total === 0 ? '0' : String(start + 1);
-    if (showToEl) showToEl.textContent = total === 0 ? '0' : String(Math.min(start + pageSize, total));
-
-    if (pageEl) pageEl.textContent = String(page);
-    if (pagesEl) pagesEl.textContent = String(pages);
-
-    if (prevBtn) prevBtn.disabled = (page <= 1);
-    if (nextBtn) nextBtn.disabled = (page >= pages);
-
-    if (!listEl) return;
-
-    if (total === 0) {
-      listEl.innerHTML = `
-        <div class="p-6 text-slate-600">
-          No questions found for the current filters.
-        </div>
-      `;
-      return;
+            if (typeof alertify !== 'undefined') {
+                alertify.confirm('Delete Questions', msg, () => { HTMLFormElement.prototype.submit.call(formEl); }, () => {}).set('labels', {ok:'Delete', cancel:'Cancel'});
+            } else if (confirm(msg)) {
+                HTMLFormElement.prototype.submit.call(formEl);
+            }
+        },
     }
-
-    listEl.innerHTML = slice.map(renderRow).join('');
-  }
-
-  if (pageSizeEl) {
-    pageSizeEl.addEventListener('change', () => {
-      pageSize = parseInt(pageSizeEl.value || '20', 10) || 20;
-      page = 1;
-      recalcAndRender();
-    });
-  }
-
-  if (prevBtn) prevBtn.addEventListener('click', () => { page--; recalcAndRender(); });
-  if (nextBtn) nextBtn.addEventListener('click', () => { page++; recalcAndRender(); });
-
-  recalcAndRender();
-})();
+}
 </script>

@@ -20,6 +20,22 @@ return [
         redirect('/public/index.php?r=admin_questions');
       }
 
+      if ($action === 'bulk_delete') {
+        $ids = $_POST['ids'] ?? [];
+        if (is_array($ids) && !empty($ids)) {
+          $ids = array_map('intval', $ids);
+          // Filter out invalid IDs
+          $ids = array_filter($ids, fn($i) => $i > 0);
+          if (!empty($ids)) {
+            $inQuery = implode(',', $ids);
+            $db->exec("DELETE FROM questions WHERE id IN ($inQuery)");
+            audit_log_event($db, (int)$admin['id'], 'QUESTION_BULK_DELETE', 'questions', 0, ['count' => count($ids)]);
+            flash_set('success', count($ids) . ' questions deleted.');
+          }
+        }
+        redirect('/public/index.php?r=admin_questions');
+      }
+
       if ($action === 'toggle_status') {
         $stmt = $db->prepare("SELECT status FROM questions WHERE id = :id LIMIT 1");
         $stmt->execute([':id' => $qid]);
@@ -86,7 +102,7 @@ return [
       JOIN levels l   ON l.id = m.level_id
       {$whereSql}
       ORDER BY q.created_at DESC
-      LIMIT 200
+      LIMIT 1000
     ");
     $stmt->execute($params);
     $questions = $stmt->fetchAll() ?: [];
@@ -136,14 +152,17 @@ return [
     if (is_post()) {
       csrf_verify();
 
-      $qt = q_norm((string)($_POST['question_text'] ?? ''));
-      $a  = q_norm((string)($_POST['option_a'] ?? ''));
-      $b  = q_norm((string)($_POST['option_b'] ?? ''));
-      $c  = q_norm((string)($_POST['option_c'] ?? ''));
-      $d  = q_norm((string)($_POST['option_d'] ?? ''));
-      $co = q_correct_option((string)($_POST['correct_option'] ?? ''));
+      $qt = trim((string)($_POST['question_text'] ?? ''));
+      $a  = trim((string)($_POST['option_a'] ?? ''));
+      $b  = trim((string)($_POST['option_b'] ?? ''));
+      $c  = trim((string)($_POST['option_c'] ?? ''));
+      $d  = trim((string)($_POST['option_d'] ?? ''));
+
+      $coRaw = strtoupper(trim((string)($_POST['correct_option'] ?? '')));
+      $co = in_array($coRaw, ['A','B','C','D'], true) ? $coRaw : '';
+
       $ex = trim((string)($_POST['explanation'] ?? ''));
-      $st = q_status((string)($_POST['status'] ?? 'active'));
+      $st = (strtolower(trim((string)($_POST['status'] ?? ''))) === 'inactive') ? 'inactive' : 'active';
 
       if ($qt === '' || $a === '' || $b === '' || $c === '' || $d === '') {
         flash_set('error', 'Question and all options are required.');
@@ -154,7 +173,8 @@ return [
         redirect('/public/index.php?r=admin_question_edit&id=' . $id);
       }
 
-      $hash = q_hash($qt, $a, $b, $c, $d);
+      // Hash for duplicates (topic scoped)
+      $hash = sha1(mb_strtolower(trim($qt . '|' . $a . '|' . $b . '|' . $c . '|' . $d)));
       $topicId = (int)$row['topic_id'];
 
       // Prevent duplicates under same topic (excluding this question)
@@ -198,10 +218,48 @@ return [
       redirect('/public/index.php?r=admin_question_edit&id=' . $id);
     }
 
-    render('admin/question_edit', [
+    render('admin/questions_edit', [
       'title' => 'Edit Question',
       'row' => $row,
     ]);
+  },
+
+  // -------------------------
+  // Admin: Question delete
+  // -------------------------
+  'admin_question_delete' => function (PDO $db, array $config): void {
+    $admin = require_admin($db);
+
+    $id = (int)($_POST['id'] ?? 0);
+
+    if (is_post()) {
+      csrf_verify();
+
+      if ($id <= 0) {
+        flash_set('error', 'Invalid question ID.');
+        redirect('/public/index.php?r=admin_questions');
+      }
+
+      // Confirm question exists before attempting deletion
+      $stmt = $db->prepare("SELECT id FROM questions WHERE id = :id LIMIT 1");
+      $stmt->execute([':id' => $id]);
+      if (!$stmt->fetch()) {
+        flash_set('error', 'Question not found.');
+        redirect('/public/index.php?r=admin_questions');
+      }
+
+      $stmt = $db->prepare("DELETE FROM questions WHERE id = :id");
+      $stmt->execute([':id' => $id]);
+
+      audit_log_event($db, (int)$admin['id'], 'QUESTION_DELETE', 'questions', $id);
+
+      flash_set('success', 'Question deleted.');
+      redirect('/public/index.php?r=admin_questions');
+    }
+
+    flash_set('error', 'Invalid request.');
+    redirect('/public/index.php?r=admin_questions');
+
   },
 
   // -------------------------

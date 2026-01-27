@@ -76,24 +76,108 @@ return [
             if ($timerSeconds < 1800) $timerSeconds = 1800;
             if ($timerSeconds > 5400) $timerSeconds = 5400;
 
-            // Pull candidate questions
-            $in = implode(',', array_fill(0, count($topicIds), '?'));
-            $limit = (int)$numQuestions; // safe literal after clamp
-            $sql = "SELECT id
-                    FROM questions
-                    WHERE status = 'active' AND topic_id IN ($in)
-                    ORDER BY RAND()
-                    LIMIT $limit";
-            $stmt = $db->prepare($sql);
-            $stmt->execute($topicIds);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            // ---------------------------------------------
+            // FRESH-FIRST QUESTION SELECTION (UPDATED)
+            // ---------------------------------------------
+            $userId = (int)$user['id'];
+            $limit  = (int)$numQuestions;
 
-            if (!$rows) {
+            $in = implode(',', array_fill(0, count($topicIds), '?'));
+
+            // STEP 1: Fresh questions (never answered correctly in any submitted attempt)
+            $sqlFresh = "
+                SELECT q.id
+                FROM questions q
+                WHERE q.status = 'active'
+                  AND q.topic_id IN ($in)
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM attempt_questions aq
+                    JOIN attempts a ON a.id = aq.attempt_id
+                    WHERE a.user_id = ?
+                      AND a.status = 'submitted'
+                      AND aq.question_id = q.id
+                      AND aq.is_correct = 1
+                  )
+                ORDER BY RAND()
+                LIMIT $limit
+            ";
+            $paramsFresh = array_merge($topicIds, [$userId]);
+            $stmt = $db->prepare($sqlFresh);
+            $stmt->execute($paramsFresh);
+            $freshRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+            $questionIds = array_map(fn($r) => (int)$r['id'], $freshRows);
+
+            // STEP 2: Backfill with mastered questions if not enough fresh
+            if (count($questionIds) < $limit) {
+                $needed = $limit - count($questionIds);
+
+                // Exclude already selected IDs (safe because generated internally)
+                $notInSql = '';
+                if (count($questionIds) > 0) {
+                    $notInSql = ' AND q.id NOT IN (' . implode(',', array_map('intval', $questionIds)) . ') ';
+                }
+
+                $sqlFillMastered = "
+                    SELECT q.id
+                    FROM questions q
+                    WHERE q.status = 'active'
+                      AND q.topic_id IN ($in)
+                      $notInSql
+                      AND EXISTS (
+                        SELECT 1
+                        FROM attempt_questions aq
+                        JOIN attempts a ON a.id = aq.attempt_id
+                        WHERE a.user_id = ?
+                          AND a.status = 'submitted'
+                          AND aq.question_id = q.id
+                          AND aq.is_correct = 1
+                      )
+                    ORDER BY RAND()
+                    LIMIT $needed
+                ";
+
+                $paramsFill = array_merge($topicIds, [$userId]);
+                $stmt = $db->prepare($sqlFillMastered);
+                $stmt->execute($paramsFill);
+                $fillRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+                $fillIds = array_map(fn($r) => (int)$r['id'], $fillRows);
+                $questionIds = array_values(array_unique(array_merge($questionIds, $fillIds)));
+
+                // STEP 3 (Safety net): if still short, fill with any remaining active questions
+                if (count($questionIds) < $limit) {
+                    $needed2 = $limit - count($questionIds);
+
+                    $notInSql2 = '';
+                    if (count($questionIds) > 0) {
+                        $notInSql2 = ' AND q.id NOT IN (' . implode(',', array_map('intval', $questionIds)) . ') ';
+                    }
+
+                    $sqlAny = "
+                        SELECT q.id
+                        FROM questions q
+                        WHERE q.status = 'active'
+                          AND q.topic_id IN ($in)
+                          $notInSql2
+                        ORDER BY RAND()
+                        LIMIT $needed2
+                    ";
+                    $stmt = $db->prepare($sqlAny);
+                    $stmt->execute($topicIds);
+                    $anyRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                    $anyIds  = array_map(fn($r) => (int)$r['id'], $anyRows);
+
+                    $questionIds = array_values(array_unique(array_merge($questionIds, $anyIds)));
+                }
+            }
+
+            if (count($questionIds) === 0) {
                 flash_set('error', 'No active questions found for the selected topics.');
                 redirect('/public/index.php?r=quiz_start');
             }
 
-            $questionIds    = array_map(fn($r) => (int)$r['id'], $rows);
             $totalQuestions = count($questionIds);
 
             $db->beginTransaction();
@@ -117,8 +201,9 @@ return [
                     INSERT INTO attempt_questions (attempt_id, question_id, marked_flag, created_at, updated_at)
                     VALUES (:aid, :qid, 0, UTC_TIMESTAMP(), UTC_TIMESTAMP())
                 ");
+
                 foreach ($questionIds as $qid) {
-                    $ins->execute(['aid' => $attemptId, 'qid' => $qid]);
+                    $ins->execute(['aid' => $attemptId, 'qid' => (int)$qid]);
                 }
 
                 $db->commit();
@@ -446,52 +531,51 @@ return [
         ]);
     },
 
-  'question_report_create' => function (PDO $db, array $config): void {
-    $user = require_login($db);
+    'question_report_create' => function (PDO $db, array $config): void {
+        $user = require_login($db);
 
-    if (!is_post()) {
-        http_json(['ok' => false, 'error' => 'Method not allowed'], 405);
-    }
+        if (!is_post()) {
+            http_json(['ok' => false, 'error' => 'Method not allowed'], 405);
+        }
 
-    csrf_verify();
+        csrf_verify();
 
-    $questionId = (int)($_POST['question_id'] ?? 0);
-    $attemptId  = (int)($_POST['attempt_id'] ?? 0);
+        $questionId = (int)($_POST['question_id'] ?? 0);
+        $attemptId  = (int)($_POST['attempt_id'] ?? 0);
 
-    // DB column is report_type (not reason)
-    $reportType = trim((string)($_POST['reason'] ?? $_POST['report_type'] ?? ''));
+        // DB column is report_type (not reason)
+        $reportType = trim((string)($_POST['reason'] ?? $_POST['report_type'] ?? ''));
 
-    // DB column is message (not details)
-    $message    = trim((string)($_POST['details'] ?? $_POST['message'] ?? ''));
+        // DB column is message (not details)
+        $message    = trim((string)($_POST['details'] ?? $_POST['message'] ?? ''));
 
-    if ($questionId <= 0 || $reportType === '') {
-        http_json(['ok' => false, 'error' => 'Question and reason are required.'], 422);
-    }
+        if ($questionId <= 0 || $reportType === '') {
+            http_json(['ok' => false, 'error' => 'Question and reason are required.'], 422);
+        }
 
-    // If attempt_id provided, validate it belongs to user
-    if ($attemptId > 0) {
-        $st = $db->prepare("SELECT id FROM attempts WHERE id = :id AND user_id = :uid LIMIT 1");
-        $st->execute([':id' => $attemptId, ':uid' => (int)$user['id']]);
-        if (!$st->fetch()) $attemptId = 0;
-    }
+        // If attempt_id provided, validate it belongs to user
+        if ($attemptId > 0) {
+            $st = $db->prepare("SELECT id FROM attempts WHERE id = :id AND user_id = :uid LIMIT 1");
+            $st->execute([':id' => $attemptId, ':uid' => (int)$user['id']]);
+            if (!$st->fetch()) $attemptId = 0;
+        }
 
-    // Use your actual schema: report_type + message
-    $stmt = $db->prepare("
-        INSERT INTO question_reports
-            (user_id, attempt_id, question_id, report_type, message, status, created_at, updated_at)
-        VALUES
-            (:uid, :aid, :qid, :rt, :msg, 'open', NOW(), NOW())
-    ");
-    $stmt->execute([
-        ':uid' => (int)$user['id'],
-        ':aid' => $attemptId > 0 ? $attemptId : null,
-        ':qid' => $questionId,
-        ':rt'  => $reportType,
-        ':msg' => ($message !== '' ? $message : null),
-    ]);
+        // Use your actual schema: report_type + message
+        $stmt = $db->prepare("
+            INSERT INTO question_reports
+                (user_id, attempt_id, question_id, report_type, message, status, created_at, updated_at)
+            VALUES
+                (:uid, :aid, :qid, :rt, :msg, 'open', NOW(), NOW())
+        ");
+        $stmt->execute([
+            ':uid' => (int)$user['id'],
+            ':aid' => $attemptId > 0 ? $attemptId : null,
+            ':qid' => $questionId,
+            ':rt'  => $reportType,
+            ':msg' => ($message !== '' ? $message : null),
+        ]);
 
-    http_json(['ok' => true]);
-},
-
+        http_json(['ok' => true]);
+    },
 
 ];
