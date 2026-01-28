@@ -320,6 +320,8 @@ return [
                         WHERE id = :id
                     ");
 
+                    $masteryInserts = [];
+
                     foreach ($rows as $row) {
                         $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
                         if (!in_array($sel, ['A','B','C','D'], true)) $sel = '';
@@ -330,6 +332,11 @@ return [
                         if ($sel !== '') {
                             $isCorrect = ($sel === $correctOpt) ? 1 : 0;
                             if ($isCorrect === 1) $stats['correct']++;
+                            if ($isCorrect === 1) {
+                                $stats['correct']++;
+                                // Prepare for mastery cache update
+                                $masteryInserts[] = ['uid' => (int)$user['id'], 'qid' => (int)$row['question_id'], 'tid' => (int)$row['topic_id']];
+                            }
                             else $stats['wrong']++;
                         }
 
@@ -359,6 +366,22 @@ return [
                         's'  => $stats['score'],
                         'id' => $attemptId,
                     ]);
+                    
+                    // ---------------------------------------------------------
+                    // OBJECTIVE 3: Update Mastery Cache
+                    // ---------------------------------------------------------
+                    if (!empty($masteryInserts)) {
+                        $mPlaceholders = [];
+                        $mParams = [];
+                        foreach ($masteryInserts as $m) {
+                            $mPlaceholders[] = "(?, ?, ?, UTC_TIMESTAMP())";
+                            array_push($mParams, $m['uid'], $m['qid'], $m['tid']);
+                        }
+                        
+                        $sqlMastery = "INSERT IGNORE INTO user_question_mastery (user_id, question_id, topic_id, mastered_at) VALUES " . implode(', ', $mPlaceholders);
+                        $stmtM = $db->prepare($sqlMastery);
+                        $stmtM->execute($mParams);
+                    }
                 }
 
                 $db->commit();
