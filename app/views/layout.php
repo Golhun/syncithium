@@ -156,18 +156,19 @@ function badge(string $text, string $tone = 'gray'): string
 
                             <div class="p-2 space-y-1">
                                 <?php if ($isAdmin): ?>
-                                    <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_users" title="Manage users and access">
-                                        <?= hi_svg('users', 'outline', 'h-4 w-4') ?>
-                                        <span>User Management</span>
-                                    </a>
-
-                                    <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
-                                       href="/public/index.php?r=admin_levels" title="Manage levels, modules, subjects, topics">
-                                        <?= hi_svg('adjustments-horizontal', 'outline', 'h-4 w-4') ?>
-                                        <span>Taxonomy</span>
-                                    </a>
-
+                                                                         <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
+                                                                           href="/public/index.php?r=admin_users" title="Manage users and access">
+                                                                            <?= hi_svg('users', 'outline', 'h-4 w-4') ?>
+                                                                            <span>User Management</span>
+                                                                        </a>
+                                    
+                                                                        <a class="flex items-center gap-2 px-3 py-2 
+                                    
+                                                                        <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
+                                                                           href="/public/index.php?r=admin_levels" title="Manage levels, modules, subjects, topics">
+                                                                            <?= hi_svg('adjustments-horizontal', 'outline', 'h-4 w-4') ?>
+                                                                            <span>Taxonomy</span>
+                                                                        </a>
                                     <a class="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-gray-50 text-sm"
                                        href="/public/index.php?r=admin_questions" title="Manage the question bank">
                                         <?= hi_svg('document-text', 'outline', 'h-4 w-4') ?>

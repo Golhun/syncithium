@@ -62,7 +62,7 @@ return [
             $topicIds = array_values(array_unique($topicIds));
             if (count($topicIds) === 0) {
                 flash_set('error', 'Select at least one topic for the quiz.');
-                redirect('/public/index.php?r=quiz_start');
+                redirect('/public/index.php?r=taxonomy_selector');
             }
 
             // Clamp question count
@@ -175,7 +175,7 @@ return [
 
             if (count($questionIds) === 0) {
                 flash_set('error', 'No active questions found for the selected topics.');
-                redirect('/public/index.php?r=quiz_start');
+                redirect('/public/index.php?r=taxonomy_selector');
             }
 
             $totalQuestions = count($questionIds);
@@ -212,11 +212,12 @@ return [
             } catch (Throwable $e) {
                 $db->rollBack();
                 flash_set('error', 'Could not start quiz. Please try again.');
-                redirect('/public/index.php?r=quiz_start');
+                redirect('/public/index.php?r=taxonomy_selector');
             }
         }
 
-        render('user/quiz_start', ['title' => 'Start quiz']);
+        // If accessed via GET, redirect to the selector page
+        redirect('/public/index.php?r=taxonomy_selector');
     },
 
     'quiz_take' => function (PDO $db, array $config): void {
@@ -225,7 +226,7 @@ return [
 
         if ($attemptId <= 0) {
             flash_set('error', 'Invalid attempt.');
-            redirect('/public/index.php?r=quiz_start');
+            redirect('/public/index.php?r=taxonomy_selector');
         }
 
         // Fetch attempt plus elapsed using DB time (prevents PHP/MySQL timezone drift)
@@ -242,7 +243,7 @@ return [
 
         if (!$attempt || (int)$attempt['user_id'] !== (int)$user['id']) {
             flash_set('error', 'Attempt not found.');
-            redirect('/public/index.php?r=quiz_start');
+            redirect('/public/index.php?r=taxonomy_selector');
         }
 
         // If already submitted, go to result
@@ -303,8 +304,14 @@ return [
                 if ($submitQuiz) {
                     $stats = ['correct' => 0, 'wrong' => 0, 'score' => 0];
 
+                    // Pull what we need for scoring + mastery update
                     $stmtQ = $db->prepare("
-                        SELECT aq.id, aq.selected_option, q.correct_option
+                        SELECT
+                          aq.id,
+                          aq.question_id,
+                          aq.selected_option,
+                          q.correct_option,
+                          q.topic_id
                         FROM attempt_questions aq
                         JOIN questions q ON q.id = aq.question_id
                         WHERE aq.attempt_id = :aid
@@ -320,33 +327,61 @@ return [
                         WHERE id = :id
                     ");
 
-                    $masteryInserts = [];
+                    // Mastery UPSERT (delta-based)
+                    // Requires: UNIQUE KEY (user_id, question_id) on user_question_mastery
+                    $upsertMastery = $db->prepare("
+                        INSERT INTO user_question_mastery
+                          (user_id, question_id, topic_id, mastery_score, mastered_at, last_seen_at, created_at, updated_at)
+                        VALUES
+                          (:uid, :qid, :tid, :delta, NULL, UTC_TIMESTAMP(), UTC_TIMESTAMP(), UTC_TIMESTAMP())
+                        ON DUPLICATE KEY UPDATE
+                          topic_id      = VALUES(topic_id),
+                          mastery_score = LEAST(10, GREATEST(0, mastery_score + VALUES(mastery_score))),
+                          last_seen_at  = UTC_TIMESTAMP(),
+                          mastered_at   = CASE
+                                           WHEN (mastery_score + VALUES(mastery_score)) >= 8
+                                             THEN COALESCE(mastered_at, UTC_TIMESTAMP())
+                                           ELSE mastered_at
+                                         END,
+                          updated_at    = UTC_TIMESTAMP()
+                    ");
 
                     foreach ($rows as $row) {
                         $sel = strtoupper(trim((string)($row['selected_option'] ?? '')));
                         if (!in_array($sel, ['A','B','C','D'], true)) $sel = '';
 
-                        $correctOpt = strtoupper((string)$row['correct_option']);
+                        $correctOpt = strtoupper((string)($row['correct_option'] ?? ''));
                         $isCorrect = null;
 
                         if ($sel !== '') {
                             $isCorrect = ($sel === $correctOpt) ? 1 : 0;
                             if ($isCorrect === 1) $stats['correct']++;
-                            if ($isCorrect === 1) {
-                                $stats['correct']++;
-                                // Prepare for mastery cache update
-                                $masteryInserts[] = ['uid' => (int)$user['id'], 'qid' => (int)$row['question_id'], 'tid' => (int)$row['topic_id']];
-                            }
                             else $stats['wrong']++;
                         }
 
+                        // Save correctness on the attempt question
                         $updateQ->execute([
                             'is_correct' => $isCorrect,
                             'id'         => (int)$row['id'],
                         ]);
+
+                        // Mastery: always update last_seen_at
+                        // If unanswered: delta 0
+                        // If answered: +1 correct, -1 wrong
+                        $delta = 0;
+                        if ($sel !== '') {
+                            $delta = ($isCorrect === 1) ? 1 : -1;
+                        }
+
+                        $upsertMastery->execute([
+                            'uid'   => (int)$user['id'],
+                            'qid'   => (int)$row['question_id'],
+                            'tid'   => (int)$row['topic_id'],
+                            'delta' => $delta,
+                        ]);
                     }
 
-                    $stats['score'] = ((string)$attempt['scoring_mode'] === 'negative')
+                    $stats['score'] = ((string)($attempt['scoring_mode'] ?? 'standard') === 'negative')
                         ? ($stats['correct'] - $stats['wrong'])
                         : $stats['correct'];
 
@@ -366,22 +401,6 @@ return [
                         's'  => $stats['score'],
                         'id' => $attemptId,
                     ]);
-                    
-                    // ---------------------------------------------------------
-                    // OBJECTIVE 3: Update Mastery Cache
-                    // ---------------------------------------------------------
-                    if (!empty($masteryInserts)) {
-                        $mPlaceholders = [];
-                        $mParams = [];
-                        foreach ($masteryInserts as $m) {
-                            $mPlaceholders[] = "(?, ?, ?, UTC_TIMESTAMP())";
-                            array_push($mParams, $m['uid'], $m['qid'], $m['tid']);
-                        }
-                        
-                        $sqlMastery = "INSERT IGNORE INTO user_question_mastery (user_id, question_id, topic_id, mastered_at) VALUES " . implode(', ', $mPlaceholders);
-                        $stmtM = $db->prepare($sqlMastery);
-                        $stmtM->execute($mParams);
-                    }
                 }
 
                 $db->commit();
@@ -455,7 +474,7 @@ return [
 
         if ($attemptId <= 0) {
             flash_set('error', 'Invalid quiz attempt.');
-            redirect('/public/index.php?r=quiz_start');
+            redirect('/public/index.php?r=taxonomy_selector');
         }
 
         $stmt = $db->prepare("SELECT * FROM attempts WHERE id = :id AND user_id = :uid LIMIT 1");
@@ -464,7 +483,7 @@ return [
 
         if (!$attempt) {
             flash_set('error', 'Quiz attempt not found.');
-            redirect('/public/index.php?r=quiz_start');
+            redirect('/public/index.php?r=taxonomy_selector');
         }
 
         if (($attempt['status'] ?? '') !== 'submitted' && empty($attempt['submitted_at'])) {
